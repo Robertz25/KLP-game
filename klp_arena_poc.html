@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KLP Arena | Trygghet &amp; Avkastning</title>
+  <style>
+    :root {
+      --ink: #18302c;
+      --muted: #60726d;
+      --paper: #f4f0e8;
+      --panel: #fffdf8;
+      --line: #d7dfd8;
+      --green: #1f7a59;
+      --mint: #dcefe2;
+      --yellow: #f2c94c;
+      --coral: #e86f51;
+      --blue: #3d77a8;
+      --shadow: 0 18px 45px rgba(27, 57, 47, .13);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      background: radial-gradient(circle at 10% 0%, #dcefe2 0 18%, transparent 42%),
+                  linear-gradient(135deg, #f6f1e7, #e8f1ea 62%, #d4e6dc);
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    button { font: inherit; }
+    .shell { width: min(1420px, 100%); margin: auto; padding: 24px clamp(14px, 3vw, 42px) 36px; }
+    .masthead { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+    .brand { display: flex; gap: 13px; align-items: center; }
+    .brand-mark { width: 46px; height: 46px; border-radius: 50%; background: var(--green); position: relative; box-shadow: 5px 5px 0 #b5d1bd; }
+    .brand-mark:before, .brand-mark:after { content: ""; position: absolute; background: #f9f4e9; border-radius: 99px; transform: rotate(-32deg); }
+    .brand-mark:before { width: 25px; height: 8px; left: 10px; top: 13px; }
+    .brand-mark:after { width: 19px; height: 7px; left: 14px; top: 25px; }
+    .eyebrow { font: 700 11px/1.2 Arial, sans-serif; letter-spacing: .16em; color: var(--green); text-transform: uppercase; }
+    h1 { margin: 3px 0 0; font-size: clamp(27px, 4vw, 46px); line-height: .95; letter-spacing: -.04em; }
+    .status { text-align: right; font: 700 12px Arial, sans-serif; color: var(--muted); }
+    .status strong { display: block; color: var(--green); font-size: 14px; margin-bottom: 4px; }
+    .layout { display: grid; grid-template-columns: minmax(600px, 1fr) 324px; gap: 20px; align-items: start; }
+    .board-wrap { background: var(--panel); border: 1px solid rgba(31, 122, 89, .16); box-shadow: var(--shadow); padding: 15px; border-radius: 9px; }
+    #game { display: block; width: 100%; height: auto; aspect-ratio: 15 / 11; background: #cfe5d5; border-radius: 4px; image-rendering: auto; }
+    .underboard { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 2px 0; }
+    .back { border: 1px solid var(--line); padding: 10px 12px; color: var(--ink); background: var(--panel); border-radius: 4px; cursor: pointer; font: 700 12px Arial, sans-serif; margin-left: 7px; }
+    .tip { font: 12px/1.4 Arial, sans-serif; color: var(--muted); }
+    .tip b { color: var(--ink); }
+    .restart { border: 0; padding: 11px 15px; color: #fffdf8; background: var(--ink); border-radius: 4px; cursor: pointer; font: 700 12px Arial, sans-serif; transition: transform .15s, background .15s; }
+    .restart:hover { transform: translateY(-2px); background: var(--green); }
+    .side { display: grid; gap: 14px; }
+    .panel { background: rgba(255, 253, 248, .88); border: 1px solid rgba(31, 122, 89, .13); border-radius: 7px; padding: 16px; box-shadow: 0 7px 24px rgba(27,57,47,.07); }
+    .panel h2 { font-size: 18px; margin: 0 0 13px; letter-spacing: -.02em; }
+    .player-list { display: grid; gap: 9px; }
+    .player-row { display: grid; grid-template-columns: 25px 1fr auto; gap: 9px; align-items: center; font: 700 12px Arial, sans-serif; }
+    .dot { width: 21px; height: 21px; border-radius: 50%; border: 3px solid rgba(0,0,0,.12); }
+    .row-meta { display: flex; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 400; margin-top: 3px; }
+    .row-meta span { background: #edf2ec; border-radius: 2px; padding: 3px 4px; }
+    .alive { color: var(--green); font-size: 11px; }
+    .dead { color: var(--coral); font-size: 11px; }
+    .power-legend { display: grid; gap: 11px; }
+    .power { display: grid; grid-template-columns: 33px 1fr; gap: 9px; align-items: center; font: 12px/1.25 Arial, sans-serif; }
+    .power-icon { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 5px; font-size: 18px; background: var(--mint); }
+    .power b { display: block; font-size: 12px; }
+    .power small { color: var(--muted); }
+    .controls { font: 11px/1.65 Arial, sans-serif; color: var(--muted); }
+    .controls strong { display: inline-block; width: 64px; color: var(--ink); }
+    .footer-note { margin-top: 17px; font: 11px Arial, sans-serif; color: #71817b; }
+    @media (max-width: 850px) { .layout { grid-template-columns: 1fr; } .side { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .shell { padding: 16px 10px 25px; } .masthead { align-items: start; } .status { display: none; } .layout { gap: 12px; } .board-wrap { padding: 8px; } .underboard { align-items: stretch; flex-direction: column; gap: 10px; } .restart { width: 100%; } .side { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div class="brand"><div class="brand-mark" aria-hidden="true"></div><div><div class="eyebrow">Local multiplayer prototype</div><h1>KLP Arena</h1><div class="eyebrow" style="margin-top:7px">Trygghet &amp; avkastning</div></div></div>
+      <div class="status"><strong id="roundStatus">ROUND 1 · LIVE</strong><span>Last player standing wins</span></div>
+    </header>
+    <div class="layout">
+      <section class="board-wrap"><canvas id="game" width="900" height="660" aria-label="KLP Arena game board"></canvas><div class="underboard"><div class="tip"><b>Risk is a strategy.</b> Invest in compound interest, but remember: your stack resets when you fall.</div><button class="restart" id="restart">Restart round</button></div></section>
+      <button class="back" id="back">Back to waiting room</button><aside class="side">
+        <section class="panel"><h2>Players</h2><div class="player-list" id="players"></div></section>
+        <section class="panel"><h2>Power-ups</h2><div class="power-legend"><div class="power"><div class="power-icon">🛡</div><div><b>Insurance</b><small>Absorbs one blast</small></div></div><div class="power"><div class="power-icon">⚡</div><div><b>Working life</b><small>Speed for 8 seconds</small></div></div><div class="power"><div class="power-icon">📈</div><div><b>Compound interest</b><small>Stacks range and capacity</small></div></div><div class="power"><div class="power-icon">✦</div><div><b>Phase shift</b><small>Walk through green blocks for 4 seconds</small></div></div><div class="power"><div class="power-icon">🔥</div><div><b>Blast radius</b><small>Explosion reaches +1 square</small></div></div><div class="power"><div class="power-icon">💣</div><div><b>Bomb capacity</b><small>Carry one extra bomb</small></div></div></div></section>
+        <section class="panel"><h2>Controls</h2><div class="controls"><div><strong>P1 · RED</strong> WASD + Space</div><div><strong>P2 · BLUE</strong> Arrows + Enter</div><div><strong>P3 · GREEN</strong> IJKL + O</div><div><strong>P4 · YELLOW</strong> TFGH + Y</div></div></section>
+      </aside>
+    </div>
+    <div class="footer-note">An original KLP-inspired arcade prototype. No financial advice, just high-stakes pixels.</div>
+  </main>
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const cols = 15, rows = 11, tile = 60;
+      const colors = ['#df614d', '#3d77a8', '#3e996b', '#e1ad2f'];
+      const names = ['RED', 'BLUE', 'GREEN', 'YELLOW'];
+      const starts = [[1,1], [13,9], [13,1], [1,9]];
+      const keys = [
+        {up:'w', down:'s', left:'a', right:'d', bomb:' '},
+        {up:'arrowup', down:'arrowdown', left:'arrowleft', right:'arrowright', bomb:'enter'},
+        {up:'i', down:'k', left:'j', right:'l', bomb:'o'},
+        {up:'t', down:'g', left:'f', right:'h', bomb:'y'}
+      ];
+      let grid, players, bombs, blasts, pickups, particles, round, roundOver, lastTime, shake;
+      const held = new Set();
+      const remoteInputs = {};
+      const botIds = new Set();
+      let networkSocket = null;
+      const room = new URLSearchParams(location.search).get('room') || (new URLSearchParams(location.search).get('host') ? 'AUTO' : null);
+      const pickTypes = ['shield', 'speed', 'compound', 'phase', 'blast', 'capacity'];
+      const label = {shield:'INSURANCE', speed:'WORKING LIFE', compound:'COMPOUND INTEREST'};
+
+      function freshGrid() {
+        grid = Array.from({length: rows}, (_, y) => Array.from({length: cols}, (_, x) => {
+          const safe = starts.some(([sx, sy]) => Math.abs(x-sx) + Math.abs(y-sy) <= 1);
+          if (safe) return 0;
+          if (x === 0 || y === 0 || x === cols-1 || y === rows-1 || (x % 2 === 0 && y % 2 === 0)) return 2;
+          return safe || Math.random() < .60 ? 0 : 1;
+        }));
+      }
+      function seedPickups() {
+        const candidates = [];
+        for (let y=1;y<rows-1;y++) for (let x=1;x<cols-1;x++) {
+          if (grid[y][x] === 0 && !starts.some(([sx,sy]) => Math.abs(x-sx) + Math.abs(y-sy) <= 2)) candidates.push({x,y});
+        }
+        candidates.sort(() => Math.random() - .5);
+        pickTypes.forEach((type, index) => { const spot=candidates[index]; if (spot) pickups.push({...spot,type,bob:Math.random()*6.28}); });
+      }
+      function reset() {
+        freshGrid(); bombs = []; blasts = []; pickups = []; particles = []; shake = 0; roundOver = false;
+        seedPickups();
+        players = starts.map(([x,y], i) => ({id:i, x:x+.5, y:y+.5, alive:true, bot:botIds.has(i + 1), aiTimer:0, aiDx:0, aiDy:0, bombCooldown:1.5, speed:3.6, speedUntil:0, phaseUntil:0, phaseWasActive:false, range:2, capacity:1, activeBombs:0, shield:false, interest:0, flash:0}));
+        round = round || 1; updatePanel();
+      }
+      function cell(x,y) { return grid[Math.floor(y)]?.[Math.floor(x)]; }
+      function blocked(x,y, who, now=performance.now()) {
+        if (x < .22 || y < .22 || x > cols-.22 || y > rows-.22) return true;
+        const gx = Math.floor(x), gy = Math.floor(y);
+        const standingOnOwnBomb = bombs.some(b => b.x === Math.floor(players[who].x) && b.y === Math.floor(players[who].y) && b.owner === who);
+        const canPhase = now < players[who].phaseUntil;
+        if ((cell(x,y) === 2 || (cell(x,y) === 1 && !canPhase)) || bombs.some(b => b.x === gx && b.y === gy && !(standingOnOwnBomb && b.owner === who))) return true;
+        return players.some(p => p.alive && p.id !== who && Math.hypot(p.x-x,p.y-y) < .42);
+      }
+      function movePlayer(p, dt, now) {
+        let dx=0, dy=0; const k=keys[p.id];
+        if (held.has(k.left)) dx--; if (held.has(k.right)) dx++; if (held.has(k.up)) dy--; if (held.has(k.down)) dy++;
+        const remote = remoteInputs[p.id + 1];
+        if (remote) { dx += remote.x; dy += remote.y; }
+        if (!dx && !dy) return;
+        const length = Math.hypot(dx,dy); dx/=length; dy/=length;
+        const speed = now < p.speedUntil ? 6.4 : p.speed;
+        const nx = p.x + dx*speed*dt, ny = p.y + dy*speed*dt;
+        if (!blocked(nx, p.y, p.id, now)) p.x = nx;
+        if (!blocked(p.x, ny, p.id, now)) p.y = ny;
+      }
+      function botInDanger(p) {
+        const x = Math.floor(p.x), y = Math.floor(p.y);
+        if (blasts.some(blast => blast.cells.some(([bx,by]) => bx === x && by === y))) return true;
+        return bombs.some(b => {
+          if (b.x === x && b.y === y) return true;
+          if (b.x === x) { for (let step=Math.min(y,b.y)+1;step<Math.max(y,b.y);step++) if (grid[step][x] > 0) return false; return Math.abs(y-b.y) <= b.range; }
+          if (b.y === y) { for (let step=Math.min(x,b.x)+1;step<Math.max(x,b.x);step++) if (grid[y][step] > 0) return false; return Math.abs(x-b.x) <= b.range; }
+          return false;
+        });
+      }
+      function botDangerAt(x,y) {
+        return botInDanger({x:x+.5,y:y+.5});
+      }
+      function botPath(p, destination, flee, allowDangerTransit=false) {
+        const start = [Math.floor(p.x),Math.floor(p.y)];
+        const goal = destination ? [Math.floor(destination.x),Math.floor(destination.y)] : null;
+        const queue = [start], visited = new Set([start.join(',')]), previous = new Map();
+        const options = [[1,0],[-1,0],[0,1],[0,-1]];
+        while (queue.length) {
+          const current = queue.shift(), [x,y] = current;
+          if ((goal && x === goal[0] && y === goal[1]) || (flee && !botDangerAt(x,y) && (x !== start[0] || y !== start[1]))) {
+            let step = current;
+            while (previous.has(step.join(',')) && previous.get(step.join(',')).join(',') !== start.join(',')) step = previous.get(step.join(','));
+            return [step[0]-start[0],step[1]-start[1]];
+          }
+          options.forEach(([dx,dy]) => {
+            const nx=x+dx, ny=y+dy, key=nx+','+ny;
+            const occupied = bombs.some(b => b.x === nx && b.y === ny && !(nx === Math.floor(p.x) && ny === Math.floor(p.y) && b.owner === p.id));
+            if (!visited.has(key) && grid[ny]?.[nx] === 0 && !occupied && (allowDangerTransit || !botDangerAt(nx,ny))) { visited.add(key); previous.set(key,current); queue.push([nx,ny]); }
+          });
+        }
+        return [0,0];
+      }
+      function botFallback(p) {
+        const options = [[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dy]) => !blocked(p.x+dx*.65,p.y+dy*.65,p.id) && !botDangerAt(Math.floor(p.x+dx*.65),Math.floor(p.y+dy*.65)));
+        return options.length ? options[Math.floor(Math.random()*options.length)] : [0,0];
+      }
+      function botTargetInBlastLine(p, target) {
+        const px=Math.floor(p.x), py=Math.floor(p.y), tx=Math.floor(target.x), ty=Math.floor(target.y);
+        if (px !== tx && py !== ty) return false;
+        const distance = px === tx ? Math.abs(ty-py) : Math.abs(tx-px);
+        if (distance > p.range) return false;
+        const dx=Math.sign(tx-px), dy=Math.sign(ty-py);
+        for (let step=1;step<distance;step++) if (grid[py+dy*step]?.[px+dx*step] > 0) return false;
+        return true;
+      }
+      function botHasAdjacentBlock(p) {
+        const x=Math.floor(p.x), y=Math.floor(p.y);
+        return [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => grid[y+dy]?.[x+dx] === 1);
+      }
+      function botBlockGoal(p) {
+        const options=[];
+        for (let y=1;y<rows-1;y++) for (let x=1;x<cols-1;x++) if (grid[y][x] === 1) {
+          [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => { if (grid[y+dy]?.[x+dx] === 0) options.push({x:x+dx,y:y+dy,distance:Math.abs(x+dx-Math.floor(p.x))+Math.abs(y+dy-Math.floor(p.y))}); });
+        }
+        return options.sort((a,b)=>a.distance-b.distance)[0];
+      }
+      function botCanEscapeAfterBomb(p) {
+        const testBomb={x:Math.floor(p.x),y:Math.floor(p.y),owner:p.id,range:p.range,timer:0,pulse:0};
+        bombs.push(testBomb);
+        const escape=botPath(p,null,true,true);
+        bombs.pop();
+        return escape[0] !== 0 || escape[1] !== 0;
+      }
+      function moveBot(p, dt, now) {
+        p.aiTimer -= dt;
+        p.bombCooldown -= dt;
+        const target = players.filter(other => other.alive && other.id !== p.id).sort((a,b) => Math.hypot(a.x-p.x,a.y-p.y) - Math.hypot(b.x-p.x,b.y-p.y))[0];
+        const pickup = pickups.sort((a,b) => Math.hypot(a.x+.5-p.x,a.y+.5-p.y) - Math.hypot(b.x+.5-p.x,b.y+.5-p.y))[0];
+        if (botInDanger(p)) {
+          [p.aiDx,p.aiDy] = botPath(p,null,true,true); if (!p.aiDx && !p.aiDy) [p.aiDx,p.aiDy] = botFallback(p); p.aiTimer = .12;
+        } else if (p.aiTimer <= 0) {
+          p.aiTimer = .35 + Math.random() * .5;
+          const blockGoal = botBlockGoal(p);
+          const destination = pickup && Math.hypot(pickup.x+.5-p.x,pickup.y+.5-p.y) < 8 ? {x:pickup.x,y:pickup.y} : (blockGoal && Math.random() < .6 ? blockGoal : target);
+          [p.aiDx,p.aiDy] = botPath(p,destination,false);
+          if (!p.aiDx && !p.aiDy && target) [p.aiDx,p.aiDy] = botPath(p,target,false);
+          if (!p.aiDx && !p.aiDy) [p.aiDx,p.aiDy] = botFallback(p);
+          const escape = botPath(p,null,true);
+          const closeTarget = target && Math.hypot(target.x-p.x,target.y-p.y) < 6;
+          const attackTarget = target && botTargetInBlastLine(p,target);
+          const opening = botHasAdjacentBlock(p);
+          if (p.bombCooldown <= 0 && (attackTarget || closeTarget || opening) && Math.random() < (attackTarget ? .55 : opening ? .65 : .3) && botCanEscapeAfterBomb(p)) { placeBomb(p); p.bombCooldown=3.5; }
+        }
+        const k = keys[p.id];
+        if (p.aiDx > 0) held.add(k.right); else held.delete(k.right);
+        if (p.aiDx < 0) held.add(k.left); else held.delete(k.left);
+        if (p.aiDy > 0) held.add(k.down); else held.delete(k.down);
+        if (p.aiDy < 0) held.add(k.up); else held.delete(k.up);
+        movePlayer(p, dt, now);
+        [k.up,k.down,k.left,k.right].forEach(key => held.delete(key));
+      }
+      function placeBomb(p) {
+        if (!p.alive || p.activeBombs >= p.capacity) return;
+        const x=Math.floor(p.x), y=Math.floor(p.y);
+        if (bombs.some(b=>b.x===x&&b.y===y)) return;
+        bombs.push({x,y,owner:p.id,range:p.range, timer:2.0, pulse:0}); p.activeBombs++;
+      }
+      function explode(b) {
+        if (!bombs.includes(b)) return;
+        bombs = bombs.filter(item => item !== b); players[b.owner].activeBombs--; shake=.18;
+        const cells = [[b.x,b.y]];
+        for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) for (let n=1;n<=b.range;n++) {
+          const x=b.x+dx*n,y=b.y+dy*n; if (grid[y]?.[x] === 2) break;
+          cells.push([x,y]); if (grid[y]?.[x] === 1) { grid[y][x]=0; maybeDrop(x,y); break; }
+        }
+        blasts.push({cells, timer:.52, hit:new Set()});
+        cells.forEach(([x,y]) => { for(let i=0;i<7;i++) particles.push({x:(x+.5)*tile,y:(y+.5)*tile,vx:(Math.random()-.5)*130,vy:(Math.random()-.5)*130,life:.5,color:'#f5b94e'}); });
+      }
+      function maybeDrop(x,y) { if (Math.random() < .32) pickups.push({x,y,type:pickTypes[Math.floor(Math.random()*pickTypes.length)], bob:Math.random()*6.28}); }
+      function collect(p) {
+        const item = pickups.findIndex(i => Math.hypot(p.x-(i.x+.5),p.y-(i.y+.5)) < .45);
+        if (item < 0) return; const power=pickups.splice(item,1)[0];
+        if (power.type==='shield') p.shield=true;
+        if (power.type==='speed') p.speedUntil=performance.now()+8000;
+        if (power.type==='compound') { p.interest=Math.min(4,p.interest+1); p.range=Math.min(6,p.range+1); p.capacity=Math.min(5,p.capacity+1); }
+        if (power.type==='phase') { p.phaseUntil=performance.now()+4000; p.phaseWasActive=true; }
+        if (power.type==='blast') p.range=Math.min(6,p.range+1);
+        if (power.type==='capacity') p.capacity=Math.min(5,p.capacity+1);
+        p.flash=1; updatePanel();
+        for(let i=0;i<14;i++) particles.push({x:(power.x+.5)*tile,y:(power.y+.5)*tile,vx:(Math.random()-.5)*80,vy:(Math.random()-.5)*80,life:.8,color: power.type==='compound'?'#4fbd82':power.type==='shield'?'#f2c94c':power.type==='phase'?'#a982d8':'#70b9e8'});
+      }
+      function ejectExpiredPhase(p) {
+        if (!p.phaseWasActive || performance.now() < p.phaseUntil || cell(p.x,p.y) !== 1) return;
+        const currentX=Math.floor(p.x), currentY=Math.floor(p.y), options=[];
+        for (let y=1;y<rows-1;y++) for (let x=1;x<cols-1;x++) if (grid[y][x] === 0 && !bombs.some(b=>b.x===x&&b.y===y) && !players.some(other=>other.alive&&other.id!==p.id&&Math.hypot(other.x-(x+.5),other.y-(y+.5))<.5)) options.push({x,y,distance:Math.abs(x-currentX)+Math.abs(y-currentY)});
+        const destination=options.sort((a,b)=>a.distance-b.distance)[0];
+        if (destination) { p.x=destination.x+.5; p.y=destination.y+.5; p.flash=1; }
+        p.phaseWasActive=false;
+      }
+      function hurt(p) {
+        if (!p.alive) return;
+        if (p.shield) { p.shield=false; p.flash=1; return; }
+        p.alive=false; p.interest=0; p.activeBombs=0; p.flash=1;
+        if (networkSocket && networkSocket.readyState === WebSocket.OPEN && !p.bot) networkSocket.send(JSON.stringify({type:'player-dead',playerId:p.id,playerKey:`p${p.id + 1}`}));
+      }
+      function tick(dt, now) {
+        if (roundOver) return;
+        players.forEach(p=>{if(p.alive){if(p.bot) moveBot(p,dt,now); else movePlayer(p,dt,now);collect(p);ejectExpiredPhase(p);}});
+        bombs.forEach(b=>{b.timer-=dt;b.pulse+=dt;if(b.timer<=0)explode(b);});
+        blasts.forEach(a=>{a.timer-=dt; a.cells.forEach(([x,y])=>players.forEach(p=>{if(p.alive&&Math.floor(p.x)===x&&Math.floor(p.y)===y&&!a.hit.has(p.id)){a.hit.add(p.id);hurt(p);}}));});
+        blasts=blasts.filter(a=>a.timer>0);
+        particles.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;q.life-=dt;}); particles=particles.filter(q=>q.life>0);
+        players.forEach(p=>p.flash=Math.max(0,p.flash-dt*2)); shake=Math.max(0,shake-dt);
+        if (players.filter(p=>p.alive).length <= 1) { const winner=players.find(p=>p.alive); if (winner && !winner.bot && networkSocket && networkSocket.readyState===WebSocket.OPEN) networkSocket.send(JSON.stringify({type:'player-won',playerKey:`p${winner.id + 1}`})); shake=0; roundOver=true; updatePanel(); }
+        updatePanel();
+      }
+      function draw(now) {
+        ctx.save(); if(shake) ctx.translate((Math.random()-.5)*shake*32,(Math.random()-.5)*shake*32);
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle='#cfe5d5';ctx.fillRect(0,0,canvas.width,canvas.height);
+        for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const v=grid[y][x];ctx.fillStyle=v===2?'#225b4d':v===1?'#6d9278':'#c4dfc9';ctx.fillRect(x*tile,y*tile,tile,tile); if(v===0){ctx.strokeStyle='rgba(47,104,75,.13)';ctx.strokeRect(x*tile+.5,y*tile+.5,tile-1,tile-1);} if(v===1){ctx.fillStyle='#9dbda2';ctx.fillRect(x*tile+5,y*tile+7,tile-10,tile-11);ctx.fillStyle='#7fa78b';ctx.fillRect(x*tile+9,y*tile+12,tile-18,4);}}
+        pickups.forEach(i=>{const bob=Math.sin(now/240+i.bob)*3;ctx.fillStyle=i.type==='shield'?'#f2c94c':i.type==='speed'?'#70b9e8':i.type==='phase'?'#a982d8':i.type==='blast'?'#e86f51':i.type==='capacity'?'#18302c':'#4fbd82';ctx.fillRect(i.x*tile+12,i.y*tile+12+bob,36,36);ctx.font='24px serif';ctx.textAlign='center';ctx.fillStyle='#fffdf8';ctx.fillText(i.type==='shield'?'🛡':i.type==='speed'?'⚡':i.type==='phase'?'✦':i.type==='blast'?'🔥':i.type==='capacity'?'💣':'📈',(i.x+.5)*tile,(i.y+.5)*tile+8+bob);});
+        bombs.forEach(b=>{const s=1+Math.sin(b.pulse*10)*.07;ctx.save();ctx.translate((b.x+.5)*tile,(b.y+.5)*tile);ctx.scale(s,s);ctx.fillStyle='#182d2b';ctx.beginPath();ctx.arc(0,5,19,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f2c94c';ctx.beginPath();ctx.arc(-6,-1,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e86f51';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(7,-12);ctx.quadraticCurveTo(20,-25,13,-31);ctx.stroke();ctx.restore();});
+        blasts.forEach(a=>a.cells.forEach(([x,y])=>{ctx.fillStyle='rgba(247,174,49,'+Math.min(1,a.timer*2)+')';ctx.fillRect(x*tile+5,y*tile+5,tile-10,tile-10);ctx.fillStyle='#fff4bb';ctx.fillRect(x*tile+18,y*tile+18,tile-36,tile-36);}));
+        players.forEach(p=>{if(!p.alive)return;const x=p.x*tile,y=p.y*tile;ctx.save();ctx.translate(x,y); if(p.flash>0){ctx.globalAlpha=.55+.45*Math.sin(p.flash*30);} ctx.fillStyle='rgba(22,48,43,.18)';ctx.beginPath();ctx.ellipse(0,19,19,7,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=colors[p.id];ctx.beginPath();ctx.arc(0,0,19,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fffdf8';ctx.beginPath();ctx.arc(-6,-4,4,0,Math.PI*2);ctx.arc(6,-4,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#18302c';ctx.beginPath();ctx.arc(-6,-4,1.7,0,Math.PI*2);ctx.arc(6,-4,1.7,0,Math.PI*2);ctx.fill();if(p.shield){ctx.strokeStyle='#f2c94c';ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,27,0,Math.PI*2);ctx.stroke();}ctx.restore(); });
+        particles.forEach(q=>{ctx.globalAlpha=Math.max(0,q.life);ctx.fillStyle=q.color;ctx.fillRect(q.x,q.y,5,5);ctx.globalAlpha=1;});
+        if(roundOver){ctx.fillStyle='rgba(24,48,44,.78)';ctx.fillRect(0,0,canvas.width,canvas.height);const winner=players.find(p=>p.alive);ctx.textAlign='center';ctx.fillStyle='#fffdf8';ctx.font='700 42px Georgia';ctx.fillText(winner?names[winner.id]+' WINS':'DRAW',canvas.width/2,canvas.height/2+12);}
+        ctx.restore();
+      }
+      function updatePanel(){const el=document.getElementById('players');el.innerHTML=players.map(p=>`<div class="player-row"><span class="dot" style="background:${colors[p.id]}"></span><div>${p.bot?'BOT · ':''}${names[p.id]}<div class="row-meta"><span>💣 ${p.capacity}</span><span>🔥 ${p.range}</span>${p.interest?`<span>📈 ×${p.interest}</span>`:''}</div></div><span class="${p.alive?'alive':'dead'}">${p.alive?(p.bot?'AI':(p.shield?'INSURED':'ACTIVE')):'OUT'}</span></div>`).join('');document.getElementById('roundStatus').textContent=roundOver?`ROUND ${round} · COMPLETE`:`ROUND ${round} · LIVE`;}
+      function frame(now){const dt=Math.min(.035,(now-lastTime)/1000||0);lastTime=now;tick(dt,now);draw(now);requestAnimationFrame(frame);}
+      window.addEventListener('keydown', e=>{const key=e.key.toLowerCase();held.add(key);const p=players?.find(p=>p.alive&&keys[p.id].bomb===key);if(p){e.preventDefault();placeBomb(p);} if(['arrowup','arrowdown','arrowleft','arrowright',' ','enter'].includes(key))e.preventDefault();});
+      window.addEventListener('keyup', e=>held.delete(e.key.toLowerCase()));
+      document.getElementById('restart').addEventListener('click',()=>{round++;reset();if(networkSocket?.readyState===WebSocket.OPEN)networkSocket.send(JSON.stringify({type:'restart'}));});
+      document.getElementById('back').addEventListener('click',()=>{location.href='/';});
+      if (room) {
+        const socket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+        networkSocket = socket;
+        socket.addEventListener('open', () => socket.send(JSON.stringify({type:'host-reconnect', room})));
+        socket.addEventListener('message', event => {
+          const message = JSON.parse(event.data);
+          if (message.type === 'reconnected') { botIds.clear(); for (let i=1;i<=4;i++) if (!message.humanIds.includes(i)) botIds.add(i); reset(); }
+          if (message.type === 'remote-input') { if (message.input.bomb) { const player = players[Number(message.id.slice(1)) - 1]; if (player) placeBomb(player); } else if (Number.isFinite(message.input.x) && Number.isFinite(message.input.y)) remoteInputs[message.id.slice(1)] = message.input; }
+          if (message.type === 'restart') { round++; reset(); }
+        });
+      }
+      reset(); requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
