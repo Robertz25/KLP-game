@@ -1,1 +1,101 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>KLP Arena | Phone Controller</title><style>body{margin:0;min-height:100vh;touch-action:none;background:#e8f1ea;color:#18302c;font-family:Arial}.wrap{width:min(420px,90%);min-height:100vh;margin:auto;padding:24px 0;display:flex;flex-direction:column}.controller{display:none;flex:1;flex-direction:column;justify-content:space-between}.joystick{width:250px;height:250px;border-radius:50%;background:#c6dfcc;position:relative;margin:30px auto}.stick{width:35%;aspect-ratio:1;border-radius:50%;background:#1f7a59;position:absolute;left:32.5%;top:32.5%}.bomb{width:100%;padding:24px;background:#e86f51;color:#fff;border:0;border-radius:4px;font-size:22px}.contact{display:none;flex-direction:column;gap:10px}.contact input{padding:14px;border:1px solid #c9d7cc;border-radius:4px}.button{padding:14px;background:#18302c;color:#fff;border:0;border-radius:4px}.status{text-align:center;color:#60726d;min-height:20px}</style></head><body><main class="wrap"><h1>KLP Arena</h1><section id="controller" class="controller"><div class="status" id="status">Connecting...</div><input id="name" placeholder="Your name" maxlength="30"><button class="button" id="save">Save name</button><div class="joystick" id="joystick"><div class="stick" id="stick"></div></div><div id="dead" class="status" style="display:none;font-size:28px;font-family:Georgia">You are out</div><form id="contact" class="contact"><input name="firstName" required placeholder="First name"><input name="lastName" required placeholder="Last name"><input name="email" required type="email" placeholder="Email"><input name="phone" required type="tel" placeholder="Phone number"><button class="button">Send details</button><button class="button" type="button" id="skip">Skip</button></form><div id="thanks" class="status" style="display:none;font-size:28px;font-family:Georgia">Thank you for playing</div><button class="bomb" id="bomb">DROP BOMB</button></section></main><script>(()=>{const room=new URLSearchParams(location.search).get('room'),socket=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host),controller=document.querySelector('#controller'),status=document.querySelector('#status'),name=document.querySelector('#name'),save=document.querySelector('#save'),bomb=document.querySelector('#bomb'),joystick=document.querySelector('#joystick'),stick=document.querySelector('#stick'),dead=document.querySelector('#dead'),contact=document.querySelector('#contact'),thanks=document.querySelector('#thanks');let active=false,vector={x:0,y:0};const send=(type,data={})=>{if(socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type,...data}))};const stop=()=>{active=false;vector={x:0,y:0};stick.style.transform='';send('input',{input:vector})};const move=e=>{e.preventDefault();const r=joystick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,max=r.width*.32,len=Math.min(max,Math.hypot(x,y)),a=Math.atan2(y,x);vector={x:Math.cos(a)*len/max,y:Math.sin(a)*len/max};stick.style.transform=`translate(${Math.cos(a)*len}px,${Math.sin(a)*len}px)`;send('input',{input:vector})};joystick.onpointerdown=e=>{active=true;joystick.setPointerCapture(e.pointerId);move(e)};joystick.onpointermove=e=>{if(active)move(e)};joystick.onpointerup=stop;joystick.onpointercancel=stop;window.onpointerup=stop;bomb.style.display='none';save.onclick=()=>send('rename',{name:name.value.trim()});bomb.onpointerdown=e=>{e.preventDefault();send('input',{input:{bomb:true}})};document.querySelector('#skip').onclick=()=>{contact.style.display='none';dead.textContent='Thanks for playing';dead.style.display='block'};contact.onsubmit=e=>{e.preventDefault();send('contact',{details:Object.fromEntries(new FormData(contact))});contact.style.display='none';dead.textContent='Thank you for playing';dead.style.display='block'};socket.onopen=()=>{if(room)send('join',{room:room.toUpperCase(),name:'Guest'});else status.textContent='No room code'};socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='joined'){controller.style.display='flex';status.textContent='Waiting for host'}if(m.type==='start'){bomb.style.display='block';status.textContent='Game started'}if(m.type==='player-dead'){joystick.style.display='none';bomb.style.display='none';name.style.display='none';save.style.display='none';dead.style.display='block';contact.style.display='flex';status.textContent=''}if(m.type==='restart'){joystick.style.display='block';bomb.style.display='block';name.style.display='block';save.style.display='block';dead.style.display='none';contact.style.display='none';thanks.style.display='none';status.textContent='New round'}}})();</script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Fiskekampen | Phone Controller</title><style>body{margin:0;min-height:100vh;touch-action:none;background:#e8f1ea;color:#18302c;font-family:Arial}.wrap{width:min(420px,90%);min-height:100vh;margin:auto;padding:24px 0;display:flex;flex-direction:column}.controller{display:none;flex:1;flex-direction:column;justify-content:space-between}.joystick{width:250px;height:250px;border-radius:50%;background:#c6dfcc;position:relative;margin:30px auto}.stick{width:35%;aspect-ratio:1;border-radius:50%;background:#1f7a59;position:absolute;left:32.5%;top:32.5%}.bomb{width:100%;padding:24px;background:#e86f51;color:#fff;border:0;border-radius:4px;font-size:22px}.contact{display:none;flex-direction:column;gap:10px}.contact input{padding:14px;border:1px solid #c9d7cc;border-radius:4px}.button{padding:14px;background:#18302c;color:#fff;border:0;border-radius:4px}.status{text-align:center;color:#60726d;min-height:20px}.freeze-panel{display:none;flex-direction:column;gap:8px;margin:6px auto 0;width:100%}.freeze-panel h3{margin:0 0 2px;text-align:center;font-size:15px;color:#0b5c78}.freeze-options{display:flex;flex-direction:column;gap:8px}.freeze-option{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 14px;border-radius:8px;border:0;font:700 15px Arial;color:#fff;cursor:pointer}.freeze-option .dot{width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,.25)}</style></head><body><main class="wrap"><h1>Fiskekampen</h1><section id="controller" class="controller"><div class="status" id="status">Connecting...</div>
+        <div id="playerFish" style="display:none;text-align:center;margin:12px 0 6px"></div>
+        <input id="name" placeholder="Your name" maxlength="30"><button class="button" id="save">Save name</button><div class="joystick" id="joystick"><div class="stick" id="stick"></div></div><div class="freeze-panel" id="freezePanel"><h3>❄️ Choose someone to freeze!</h3><div class="freeze-options" id="freezeOptions"></div></div><div id="dead" class="status" style="display:none;font-size:28px;font-family:Georgia">You are out</div><form id="contact" class="contact"><input name="firstName" required placeholder="First name"><input name="lastName" required placeholder="Last name"><input name="email" required type="email" placeholder="Email"><input name="phone" required type="tel" placeholder="Phone number"><button class="button">Send details</button><button class="button" type="button" id="skip">Skip</button></form><div id="thanks" class="status" style="display:none;font-size:28px;font-family:Georgia">Thank you for playing</div></section></main>
+        <script>(()=>{const room=new URLSearchParams(location.search).get('room'),controller=document.querySelector('#controller'),status=document.querySelector('#status'),name=document.querySelector('#name'),save=document.querySelector('#save'),joystick=document.querySelector('#joystick'),stick=document.querySelector('#stick'),dead=document.querySelector('#dead'),contact=document.querySelector('#contact'),thanks=document.querySelector('#thanks'),fishEl=document.getElementById('playerFish'),freezePanel=document.getElementById('freezePanel'),freezeOptions=document.getElementById('freezeOptions');let active=false,vector={x:0,y:0},pulse=null,socket=null,reconnectTimer=null,reconnectAttempts=0,hasJoined=false,intentionalClose=false,myName='Guest',freezeTimeout=null;controller.style.display='flex';const sessionKey=room?('klp-fiske-session-'+room.toUpperCase()):null;console.log('[phone] init',{room,sessionKey});try{if(sessionKey){const saved=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(saved && saved.id){window.myPlayerId=saved.id;window.myPlayerColor=saved.color;myName=saved.name||myName;console.log('[phone] restored session from sessionStorage',saved);}}}catch(e){console.warn('[phone] failed to read sessionStorage',e);}const send=(type,data={})=>{if(socket && socket.readyState===WebSocket.OPEN){console.log('[phone] send',type,data);socket.send(JSON.stringify({type,...data}));}else console.warn('[phone] tried to send while socket not open',type,data);};const stop=()=>{active=false;if(pulse){clearInterval(pulse);pulse=null}vector={x:0,y:0};stick.style.transform='';send('input',{input:vector})};const move=e=>{e.preventDefault();const r=joystick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,max=r.width*.32,len=Math.min(max,Math.hypot(x,y)),a=Math.atan2(y,x);vector={x:Math.cos(a)*len/max,y:Math.sin(a)*len/max};stick.style.transform=`translate(${Math.cos(a)*len}px,${Math.sin(a)*len}px)`;send('input',{input:vector})};joystick.onpointerdown=e=>{active=true;if(pulse){clearInterval(pulse)}pulse=setInterval(()=>send('input',{input:vector}),50);joystick.setPointerCapture(e.pointerId);move(e)};joystick.onpointermove=e=>{if(active)move(e)};joystick.onpointerup=stop;joystick.onpointercancel=stop;window.onpointerup=stop;save.onclick=()=>{if(name.value.trim()){myName=name.value.trim();send('rename',{name:myName});name.style.display='none';save.style.display='none';try{if(sessionKey){const saved=JSON.parse(sessionStorage.getItem(sessionKey)||'{}');saved.name=myName;sessionStorage.setItem(sessionKey,JSON.stringify(saved));}}catch(e){}}};document.querySelector('#skip').onclick=()=>{contact.style.display='none';dead.textContent='Thanks for playing';dead.style.display='block'};contact.onsubmit=e=>{e.preventDefault();send('contact',{details:Object.fromEntries(new FormData(contact))});contact.style.display='none';dead.textContent='Thank you for playing';dead.style.display='block'};
+        function hideFreezeOverlay(){ freezePanel.style.display = 'none'; freezeOptions.innerHTML = ''; if (freezeTimeout) { clearTimeout(freezeTimeout); freezeTimeout = null; } }
+        function showFreezeOffer(options){
+          if (!options || !options.length) return;
+          freezeOptions.innerHTML = '';
+          options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'freeze-option';
+            btn.style.background = opt.color || '#18302c';
+            btn.innerHTML = `<span class="dot"></span><span>${opt.name || opt.id}</span>`;
+            btn.onclick = () => { send('freeze-pick', { targetKey: opt.id }); hideFreezeOverlay(); };
+            freezeOptions.appendChild(btn);
+          });
+          freezePanel.style.display = 'flex';
+          if (freezeTimeout) clearTimeout(freezeTimeout);
+          // auto-pick a random target if the player doesn't choose in time
+          freezeTimeout = setTimeout(() => {
+            const pick = options[Math.floor(Math.random() * options.length)];
+            send('freeze-pick', { targetKey: pick.id });
+            hideFreezeOverlay();
+          }, 6000);
+        }
+                function scheduleReconnect(){
+                  if (intentionalClose || reconnectTimer) return;
+                  reconnectAttempts++;
+                  const delay = Math.min(5000, 1000 * reconnectAttempts);
+                  console.log('[phone] scheduling reconnect', {attempt: reconnectAttempts, delay});
+                  reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, delay);
+                }
+                function connect(){
+                  console.log('[phone] connecting...', {attempt: reconnectAttempts, hasSavedId: !!window.myPlayerId});
+                  socket = new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
+                  socket.onopen = () => {
+                    console.log('[phone] socket open');
+                    reconnectAttempts = 0;
+                  if (window.myPlayerId) { status.textContent = 'Reconnecting...'; send('rejoin', { room: room.toUpperCase(), id: window.myPlayerId, name: myName }); }
+                    else if (room) { send('join', { room: room.toUpperCase(), name: myName }); status.textContent = 'Joining...'; }
+                    else status.textContent = 'No room code';
+                  };
+                  socket.onerror = (ev) => { console.error('[phone] WebSocket error', ev); };
+                  socket.onclose = (ev) => { console.warn('[phone] socket closed', {code: ev.code, reason: ev.reason, intentionalClose}); if (!intentionalClose) { status.textContent = 'Connection lost. Reconnecting...'; scheduleReconnect(); } };
+                  socket.onmessage = e => {
+                              const m = JSON.parse(e.data);
+                              console.log('[phone] message received', m.type, m);
+                              if (m && m.type === 'error') {
+                                status.textContent = m.message || 'Error';
+                                if (window.myPlayerId) { try{if(sessionKey)sessionStorage.removeItem(sessionKey);}catch(e){} window.myPlayerId = null; window.myPlayerColor = null; if (room) send('join', { room: room.toUpperCase(), name: myName }); }
+                                return;
+                              }
+                              if (m.type === 'joined') {
+                                hasJoined = true;
+                                controller.style.display = 'flex';
+                                const idx = Number(m.id.slice(1));
+                                const paletteNames = ['RED','BLUE','GREEN','YELLOW'];
+                                const displayName = paletteNames[idx-1] || ('P'+idx);
+                                fishEl.style.display = 'block';
+                                fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><ellipse cx="32" cy="16" rx="26" ry="16" fill="${m.color}"/><polygon points="52,12 62,8 62,24 52,20" fill="${m.color}"/><circle cx="44" cy="10" r="3.8" fill="#fffdf8"/><circle cx="44" cy="10" r="1.6" fill="#18302c"/></svg>`;
+                                status.innerHTML = `<div style="font-weight:700;font-size:18px;color:var(--ink)">You are ${displayName}</div><div style="font-size:13px;color:#60726d">Player ${idx}</div>`;
+                                window.myPlayerId = m.id; window.myPlayerColor = m.color;
+                                try{if(sessionKey)sessionStorage.setItem(sessionKey,JSON.stringify({id:m.id,color:m.color,name:myName}));}catch(e){}
+                              }
+                              if (m.type === 'start') {
+                                const color = window.myPlayerColor || m.color || '#1f7a59';
+                                const pid = window.myPlayerId ? Number(window.myPlayerId.slice(1)) : null;
+                                const paletteNames = ['RED','BLUE','GREEN','YELLOW'];
+                                const displayName = pid ? (paletteNames[pid-1] || ('P'+pid)) : 'Player';
+                                fishEl.style.display = 'block';
+                                fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><ellipse cx="32" cy="16" rx="26" ry="16" fill="${color}"/><polygon points="52,12 62,8 62,24 52,20" fill="${color}"/><circle cx="44" cy="10" r="3.8" fill="#fffdf8"/><circle cx="44" cy="10" r="1.6" fill="#18302c"/></svg>`;
+                                status.innerHTML = `<div style="font-weight:700;font-size:18px;color:var(--ink)">You are ${displayName}</div><div style="font-size:13px;color:#60726d">${pid?('Player '+pid):''}</div><div style="font-size:14px;color:#60726d">Game started</div>`;
+                                name.style.display = 'none'; save.style.display = 'none';
+                              }
+                              if (m.type === 'freeze-offer') { showFreezeOffer(m.options); }
+                              if (m.type === 'player-dead') {
+                                hideFreezeOverlay();
+                                joystick.style.display = 'none'; name.style.display = 'none'; save.style.display = 'none'; dead.textContent = 'You are out'; dead.style.display = 'block'; contact.style.display = 'flex'; status.textContent = '';
+                                if (fishEl) fishEl.style.opacity = '0.35';
+                              }
+                              if (m.type === 'player-won') {
+                                hideFreezeOverlay();
+                                joystick.style.display = 'none'; name.style.display = 'none'; save.style.display = 'none'; dead.textContent = 'You won!'; dead.style.display = 'block'; contact.style.display = 'flex'; status.textContent = '';
+                              }
+                              if (m.type === 'restart') {
+                                hideFreezeOverlay();
+                                joystick.style.display = 'block'; name.style.display = 'none'; save.style.display = 'none'; dead.style.display = 'none'; contact.style.display = 'none'; thanks.style.display = 'none'; status.textContent = 'New round';
+                                if (fishEl) { fishEl.style.opacity = '1'; }
+                              }
+                              if (m.type === 'room-closed') {
+                                intentionalClose = true; hasJoined = false;
+                                hideFreezeOverlay();
+                                try{if(sessionKey)sessionStorage.removeItem(sessionKey);}catch(e){}
+                                status.textContent = m.message || 'The room was closed by the host';
+                                controller.style.display = 'none';
+                                setTimeout(() => location.href = '/', 1400);
+                              }
+                            };
+                }
+                connect();
+                        })();</script></body></html>

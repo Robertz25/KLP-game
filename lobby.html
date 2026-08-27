@@ -1,1 +1,170 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KLP Arena | Waiting Room</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#e8f1ea;color:#18302c;font-family:Georgia,serif}.card{width:min(620px,90%);padding:42px;background:#fffdf8;border-radius:9px;box-shadow:0 18px 45px #18302c22;text-align:center}.eyebrow{font:700 11px Arial;letter-spacing:.16em;color:#1f7a59}h1{font-size:52px;margin:10px}.room{background:#dcefe2;padding:20px;margin:24px 0}.room small{font:700 11px Arial;color:#1f7a59}#code{font:700 64px Arial;letter-spacing:.16em;margin:8px}.players{display:grid;gap:8px;margin:18px 0;text-align:left}.player{padding:12px;background:#f1f4ee;font:700 12px Arial}.button{width:100%;padding:15px;border:0;border-radius:4px;background:#18302c;color:#fff;font:700 13px Arial}.button:disabled{opacity:.4}</style></head><body><main class="card"><div class="eyebrow">KLP ARENA · LOCAL HOST</div><h1>Waiting room</h1><p>Scan the QR code to join.</p><div class="room"><small>ROOM CODE</small><div id="code">----</div></div><div class="players" id="players"><div class="player">Host · Connected</div></div><button class="button" id="start" disabled>Start arena</button></main><script>const ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host),code=document.querySelector('#code'),list=document.querySelector('#players'),start=document.querySelector('#start');ws.onopen=()=>ws.send(JSON.stringify({type:'create'}));ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='created')code.textContent=m.room;if(m.type==='players'){list.innerHTML='<div class="player">Host · Connected</div>'+m.players.map(p=>`<div class="player">${p.name} · Ready</div>`).join('');start.disabled=!m.players.length||m.started}};start.onclick=()=>{ws.send(JSON.stringify({type:'start'}));location.href='/klp_arena_poc.html?host=1'};</script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KLP Arena | Waiting Room</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#e8f1ea;color:#18302c;font-family:Georgia,serif}.card{width:min(740px,95%);padding:42px;background:#fffdf8;border-radius:9px;box-shadow:0 18px 45px #18302c22;text-align:center}.eyebrow{font:700 11px Arial;letter-spacing:.16em;color:#1f7a59}h1{font-size:52px;margin:10px}.room{background:#dcefe2;padding:20px;margin:24px 0}.room small{font:700 11px Arial;color:#1f7a59}#code{font:700 64px Arial;letter-spacing:.16em;margin:8px}.players{display:grid;gap:8px;margin:18px 0;text-align:left}.player{display:flex;align-items:center;gap:12px;padding:12px;background:#f1f4ee;border-radius:6px}.fish{width:56px;height:34px;flex:0 0 56px}.meta{display:flex;flex-direction:column}.meta .name{font-weight:700}.meta .status{font-size:12px;color:#60726d}.button{width:100%;padding:15px;border:0;border-radius:4px;background:#18302c;color:#fff;font:700 13px Arial;cursor:pointer}.button:disabled{background:#7c8c86;color:#f1f4ee;opacity:1;cursor:not-allowed}</style></head><body><main class="card">
+    <div style="display:flex;justify-content:center;margin-bottom:6px">
+      <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#0f6c57"/><stop offset="1" stop-color="#165c4a"/></linearGradient></defs><rect width="64" height="64" rx="32" fill="url(#g)"/><g transform="translate(8,20) scale(.8)"><ellipse cx="32" cy="16" rx="20" ry="10" fill="#fff" opacity="0.95"/><polygon points="52,12 62,8 62,24 52,20" fill="#fff" opacity="0.95"/></g></svg>
+    </div>
+    <div class="eyebrow">Fiskekampen</div>
+    <h1 style="margin:6px 0 0;font-size:44px">TA TERRITORIUM</h1>
+    <h2 style="font-size:20px;font-weight:700;margin:8px 0 6px;color:#18302c">Venterom</h2>
+    <p style="margin:0 0 18px;color:#425e56">Skann QR-koden med mobilen for å bli med i spillet.</p>
+
+    <div style="display:flex;justify-content:center;">
+      <div id="qrWrap" style="width:260px;height:260px;border-radius:12px;background:#fff;padding:18px;box-shadow:0 14px 30px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center">
+        <img id="qrImage" src="" alt="QR code" style="width:220px;height:220px;border-radius:8px;display:block;background:#fff">
+      </div>
+    </div>
+
+    <div class="room" style="margin-top:18px;padding:0;background:transparent;box-shadow:none">
+      <div id="code" style="display:none">----</div>
+      <div class="ocean" style="width:100%;aspect-ratio:600/220;background:transparent;border-radius:8px;margin-top:10px;position:relative">
+        <svg viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block">
+          <defs>
+            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="none"/><path d="M20 0L0 0 0 20" fill="none" stroke="#123a37" stroke-width="1"/></pattern>
+            <path id="oceanShape" d="M0,58 C80,18 160,18 240,52 C320,86 400,86 480,52 C520,32 560,32 600,52 L600,220 L0,220 Z" />
+          </defs>
+          <use href="#oceanShape" fill="#0a2e2c" />
+          <use href="#oceanShape" fill="url(#grid)" opacity="0.7" />
+
+          <!-- claimed territory tiles behind each fish (varying counts, like in-game ownership) -->
+          <g opacity="0.55">
+            <rect x="100" y="100" width="20" height="20" fill="#df614d"/>
+            <rect x="120" y="100" width="20" height="20" fill="#df614d"/>
+            <rect x="80" y="120" width="20" height="20" fill="#df614d"/>
+            <rect x="100" y="120" width="20" height="20" fill="#df614d"/>
+            <rect x="120" y="120" width="20" height="20" fill="#df614d"/>
+            <rect x="100" y="140" width="20" height="20" fill="#df614d"/>
+            <rect x="120" y="140" width="20" height="20" fill="#df614d"/>
+
+            <rect x="180" y="140" width="20" height="20" fill="#f2c94c"/>
+            <rect x="200" y="140" width="20" height="20" fill="#f2c94c"/>
+            <rect x="220" y="140" width="20" height="20" fill="#f2c94c"/>
+            <rect x="180" y="160" width="20" height="20" fill="#f2c94c"/>
+            <rect x="200" y="160" width="20" height="20" fill="#f2c94c"/>
+            <rect x="220" y="160" width="20" height="20" fill="#f2c94c"/>
+            <rect x="200" y="180" width="20" height="20" fill="#f2c94c"/>
+
+            <rect x="440" y="60" width="20" height="20" fill="#3e996b"/>
+            <rect x="460" y="60" width="20" height="20" fill="#3e996b"/>
+            <rect x="480" y="60" width="20" height="20" fill="#3e996b"/>
+            <rect x="440" y="80" width="20" height="20" fill="#3e996b"/>
+            <rect x="460" y="80" width="20" height="20" fill="#3e996b"/>
+            <rect x="480" y="80" width="20" height="20" fill="#3e996b"/>
+            <rect x="460" y="100" width="20" height="20" fill="#3e996b"/>
+
+            <rect x="480" y="140" width="20" height="20" fill="#3d77a8"/>
+            <rect x="500" y="140" width="20" height="20" fill="#3d77a8"/>
+            <rect x="520" y="140" width="20" height="20" fill="#3d77a8"/>
+            <rect x="480" y="160" width="20" height="20" fill="#3d77a8"/>
+            <rect x="500" y="160" width="20" height="20" fill="#3d77a8"/>
+            <rect x="520" y="160" width="20" height="20" fill="#3d77a8"/>
+            <rect x="500" y="180" width="20" height="20" fill="#3d77a8"/>
+          </g>
+
+          <!-- seaweed clusters left & right -->
+          <g id="seaweed-left" stroke-linecap="round" fill="none" opacity="0.9">
+            <path d="M40 220 C36 188 50 168 44 144" stroke="#7fa89c" stroke-width="7"/>
+            <path d="M56 220 C58 183 40 158 46 130" stroke="#8fb6a9" stroke-width="7"/>
+            <path d="M70 220 C74 188 62 168 68 146" stroke="#6f998c" stroke-width="6"/>
+          </g>
+          <ellipse cx="46" cy="218" rx="22" ry="7" fill="#c9a876" opacity="0.35"/>
+
+          <g id="seaweed-right" stroke-linecap="round" fill="none" opacity="0.9">
+            <path d="M520 220 C516 186 530 164 524 138" stroke="#7fa89c" stroke-width="7"/>
+            <path d="M538 220 C540 183 522 156 528 126" stroke="#8fb6a9" stroke-width="7"/>
+            <path d="M554 220 C558 188 546 168 552 144" stroke="#6f998c" stroke-width="6"/>
+          </g>
+          <ellipse cx="536" cy="218" rx="22" ry="7" fill="#c9a876" opacity="0.35"/>
+
+          <!-- bubbles -->
+          <g fill="#6fb3d9" opacity="0.55">
+            <circle cx="90" cy="42" r="4"/>
+            <circle cx="130" cy="66" r="2.6"/>
+            <circle cx="470" cy="38" r="3.4"/>
+            <circle cx="430" cy="82" r="2.4"/>
+          </g>
+
+          <!-- fish matching the in-game drawFish style: ellipse body + tail fin + eye, with outline for contrast against tiles -->
+          <g transform="translate(110,110) rotate(200)">
+            <ellipse cx="0" cy="16" rx="16" ry="6" fill="rgba(0,0,0,.18)"/>
+            <polygon points="-16,0 -30,9 -30,-9" fill="#df614d" stroke="#000000" stroke-width="2" stroke-linejoin="round"/>
+            <ellipse cx="0" cy="0" rx="18" ry="12" fill="#df614d" stroke="#000000" stroke-width="2"/>
+            <circle cx="7" cy="-3" r="3.4" fill="#fffdf8"/>
+            <circle cx="7" cy="-3" r="1.5" fill="#18302c"/>
+            <path d="M 15 5 A 3.2 3.2 0 0 0 21 5" fill="none" stroke="#18302c" stroke-width="1.6" stroke-linecap="round"/>
+          </g>
+
+          <g transform="translate(200,155) rotate(-15)">
+            <ellipse cx="0" cy="14" rx="14" ry="5" fill="rgba(0,0,0,.18)"/>
+            <polygon points="-14,0 -26,8 -26,-8" fill="#f2c94c" stroke="#000000" stroke-width="2" stroke-linejoin="round"/>
+            <ellipse cx="0" cy="0" rx="16" ry="11" fill="#f2c94c" stroke="#000000" stroke-width="2"/>
+            <circle cx="6" cy="-3" r="3" fill="#fffdf8"/>
+            <circle cx="6" cy="-3" r="1.3" fill="#18302c"/>
+            <path d="M 13 5 A 2.8 2.8 0 0 0 18.5 5" fill="none" stroke="#18302c" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+
+          <g transform="translate(475,70) rotate(95)">
+            <ellipse cx="0" cy="16" rx="16" ry="6" fill="rgba(0,0,0,.18)"/>
+            <polygon points="-16,0 -30,9 -30,-9" fill="#3e996b" stroke="#000000" stroke-width="2" stroke-linejoin="round"/>
+            <ellipse cx="0" cy="0" rx="18" ry="12" fill="#3e996b" stroke="#000000" stroke-width="2"/>
+            <circle cx="7" cy="-3" r="3.4" fill="#fffdf8"/>
+            <circle cx="7" cy="-3" r="1.5" fill="#18302c"/>
+            <path d="M 15 5 A 3.2 3.2 0 0 0 21 5" fill="none" stroke="#18302c" stroke-width="1.6" stroke-linecap="round"/>
+          </g>
+
+          <g transform="translate(505,140) rotate(-80)">
+            <ellipse cx="0" cy="16" rx="16" ry="6" fill="rgba(0,0,0,.18)"/>
+            <polygon points="-16,0 -30,9 -30,-9" fill="#3d77a8" stroke="#000000" stroke-width="2" stroke-linejoin="round"/>
+            <ellipse cx="0" cy="0" rx="18" ry="12" fill="#3d77a8" stroke="#000000" stroke-width="2"/>
+            <circle cx="7" cy="-3" r="3.4" fill="#fffdf8"/>
+            <circle cx="7" cy="-3" r="1.5" fill="#18302c"/>
+            <path d="M 15 5 A 3.2 3.2 0 0 0 21 5" fill="none" stroke="#18302c" stroke-width="1.6" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-top:16px;justify-content:center;align-items:center">
+      <button id="connectedBtn" class="button" disabled style="background:#d3ecdf;color:#0f5132;border-radius:24px;padding:10px 18px;border:1px solid #9fd4bb;min-width:160px">● Vert tilkoblet</button>
+      <button class="button" id="start" disabled style="min-width:140px">Start arena</button>
+    </div>
+
+    <div class="players" id="players" style="margin-top:14px"></div>
+
+    <script>
+      // update qrImage when room code is set
+      (function(){
+        const qr=document.getElementById('qrImage'), code=document.getElementById('code');
+        const update=()=>{
+          const room=code.textContent.trim();
+          if(room&&room!=='----'){
+            qr.src='/qr?data='+encodeURIComponent(location.origin+'/controller.html?room='+room);
+          }
+        };
+        new MutationObserver(update).observe(code,{childList:true,characterData:true,subtree:true});
+        update();
+      })();
+    </script>
+
+  </main><script>
+    // If this page is restored from the browser's back/forward cache (e.g. user
+    // pressed "back" from the game), the old room code/QR would stay on screen
+    // even though that room is already marked "started" on the server, causing
+    // "Room is unavailable or full" when someone scans it. Force a real reload
+    // so a brand-new room/code is created.
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) location.reload();
+    });
+    let ws, wsReconnectTimer = null;
+    const code=document.querySelector('#code'),list=document.querySelector('#players'),start=document.querySelector('#start');
+    function connectLobbySocket(){
+      ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
+      ws.onopen=()=>{ if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; } ws.send(JSON.stringify({type:'create'})); };
+      ws.onmessage=e=>{
+        const m=JSON.parse(e.data);
+        if(m.type==='created')code.textContent=m.room;
+        if(m.type==='players'){list.innerHTML='<div class="player">Host · Connected</div>'+m.players.map(p=>`<div class="player"><svg class="fish" viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg"><ellipse cx="32" cy="16" rx="20" ry="10" fill="${p.color}"/><polygon points="52,12 62,8 62,24 52,20" fill="${p.color}"/></svg><div class="meta"><div class="name">${p.name}</div><div class="status">Ready</div></div></div>`).join('');start.disabled=!m.players.length||m.started;}
+      };
+      ws.onclose=()=>{ code.textContent='----'; if (!wsReconnectTimer) wsReconnectTimer = setTimeout(connectLobbySocket, 1500); };
+    }
+    connectLobbySocket();
+    start.onclick=()=>{ws.send(JSON.stringify({type:'start'}));location.href='/klp_arena_poc.html?host=1'};
+  </script></body></html>
