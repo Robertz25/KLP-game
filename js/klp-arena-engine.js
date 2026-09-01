@@ -356,17 +356,53 @@
     const TRAIL_EXPANSION = 0; // set >0 to make trails occupy a larger grid footprint for collisions
     // Visual scale for trail stroke; increase to make lines look thicker without changing collision.
     const TRAIL_VISUAL_SCALE = 0.9; // used to scale canvas lineWidth for rendering
-    function claimStartArea(p, cx, cy) {
-        const r2 = START_RADIUS * START_RADIUS;
-        const minX = Math.max(0, cx - START_RADIUS), maxX = Math.min(cols - 1, cx + START_RADIUS);
-        const minY = Math.max(0, cy - START_RADIUS), maxY = Math.min(rows - 1, cy + START_RADIUS);
-        for (let yy = minY; yy <= maxY; yy++) {
-            for (let xx = minX; xx <= maxX; xx++) {
-                const dx = xx - cx, dy = yy - cy;
-                if (dx * dx + dy * dy <= r2) ownerGrid[yy][xx] = p.id;
+    // Claim a small circular start area around (cx,cy).
+        // If `force` is false the call will only claim tiles that are currently unowned
+        // so it never overwrites another player's territory (safe for respawns and
+        // takeovers). When called during a full reset the grid is empty so `force` can
+        // be omitted.
+        function claimStartArea(p, cx, cy, force = false) {
+            const r2 = START_RADIUS * START_RADIUS;
+            const minX = Math.max(0, cx - START_RADIUS), maxX = Math.min(cols - 1, cx + START_RADIUS);
+            const minY = Math.max(0, cy - START_RADIUS), maxY = Math.min(rows - 1, cy + START_RADIUS);
+            for (let yy = minY; yy <= maxY; yy++) {
+                for (let xx = minX; xx <= maxX; xx++) {
+                    const dx = xx - cx, dy = yy - cy;
+                    if (dx * dx + dy * dy <= r2) {
+                        if (force || ownerGrid[yy][xx] === null) ownerGrid[yy][xx] = p.id;
+                    }
+                }
             }
         }
-    }
+
+        // Find the nearest center point where a START_RADIUS disk is fully clear (all
+        // cells currently ownerGrid === null). If none exists returns null.
+        function findNearestClearStart(preferredCx, preferredCy) {
+            function areaClear(cx, cy) {
+                const minX = Math.max(0, cx - START_RADIUS), maxX = Math.min(cols - 1, cx + START_RADIUS);
+                const minY = Math.max(0, cy - START_RADIUS), maxY = Math.min(rows - 1, cy + START_RADIUS);
+                const r2 = START_RADIUS * START_RADIUS;
+                for (let yy = minY; yy <= maxY; yy++) {
+                    for (let xx = minX; xx <= maxX; xx++) {
+                        const dx = xx - cx, dy = yy - cy;
+                        if (dx * dx + dy * dy <= r2) {
+                            if (ownerGrid[yy][xx] !== null) return false;
+                        }
+                    }
+                }
+                return true;
+            }
+            if (areaClear(preferredCx, preferredCy)) return [preferredCx, preferredCy];
+            let best = null, bestDist = Infinity;
+            for (let yy = START_RADIUS; yy < rows - START_RADIUS; yy++) {
+                for (let xx = START_RADIUS; xx < cols - START_RADIUS; xx++) {
+                    if (!areaClear(xx, yy)) continue;
+                    const d = Math.hypot(xx - preferredCx, yy - preferredCy);
+                    if (d < bestDist) { bestDist = d; best = [xx, yy]; }
+                }
+            }
+            return best;
+        }
 
     function reset() {
         freshGrid();
@@ -408,20 +444,25 @@
     // Continuous-mode respawn: bring a single slot back to life at its starting corner
     // without touching anyone else's board state, so the match itself never stops.
     function respawnPlayer(p) {
-        const [x, y] = starts[p.id];
-        p.x = x + .5;
-        p.y = y + .5;
-        p.trail = [];
-        p.isOut = false;
-        p.frozenUntil = 0;
-        p.speedBoostUntil = 0;
-        p.lastCell = null;
-        p.heading = undefined;
-        // freed territory becomes neutral again so it's up for grabs, matching paper.io's
-        // rule that a defeated player's land opens back up rather than staying claimed forever.
-        for (let yy = 0; yy < rows; yy++) for (let xx = 0; xx < cols; xx++) if (ownerGrid[yy][xx] === p.id) ownerGrid[yy][xx] = null;
-        claimStartArea(p, Math.floor(p.x), Math.floor(p.y));
-    }
+            // Reset state fields
+            p.trail = [];
+            p.isOut = false;
+            p.frozenUntil = 0;
+            p.speedBoostUntil = 0;
+            p.lastCell = null;
+            p.heading = undefined;
+            // Clear any lingering owner tiles that belonged to this slot so they don't
+            // block finding a nearby clear spawn.
+            for (let yy = 0; yy < rows; yy++) for (let xx = 0; xx < cols; xx++) if (ownerGrid[yy][xx] === p.id) ownerGrid[yy][xx] = null;
+            const [cornerX, cornerY] = starts[p.id];
+            const preferredCx = Math.floor(cornerX), preferredCy = Math.floor(cornerY);
+            // Try to find the nearest clear start disk; fall back to the corner if none.
+            const spawn = findNearestClearStart(preferredCx, preferredCy) || [preferredCx, preferredCy];
+            p.x = spawn[0] + 0.5;
+            p.y = spawn[1] + 0.5;
+            // Claim only the currently-free tiles (don't overwrite other players)
+            claimStartArea(p, Math.floor(p.x), Math.floor(p.y), false);
+        }
 
     function blocked(x, y, who) {
         if (x < .22 || y < .22 || x > cols - .22 || y > rows - .22) return true;
@@ -1819,16 +1860,53 @@
                             // Ensure it's treated as a human and respawn at its corner.
                             botIds.delete(id);
                             slot.bot = false;
-                            // clear any death state and trails, then place at start and claim area
+                            // clear any death state and trails, then try to place at a clear start and claim area
                             slot.isOut = false;
                             slot.trail = [];
                             slot.lastCell = null;
                             slot.heading = undefined;
-                            const [sx, sy] = starts[slot.id];
-                            slot.x = sx + 0.5; slot.y = sy + 0.5;
-                            // freed territory becomes neutral so a newly-joined human doesn't inherit
-                            // the bot's previous land — match respawnPlayer behaviour.
+                            const [cornerX, cornerY] = starts[slot.id];
+                            // Clear any lingering owner cells for that slot id first — the player is
+                            // taking over the slot, so its previous owned tiles shouldn't block
+                            // finding a nearby clear start area.
                             for (let yy = 0; yy < rows; yy++) for (let xx = 0; xx < cols; xx++) if (ownerGrid[yy][xx] === slot.id) ownerGrid[yy][xx] = null;
+                            // helper: is the whole START_RADIUS disk around (cx,cy) free of owners?
+                            function areaClear(cx, cy) {
+                                const minX = Math.max(0, cx - START_RADIUS), maxX = Math.min(cols - 1, cx + START_RADIUS);
+                                const minY = Math.max(0, cy - START_RADIUS), maxY = Math.min(rows - 1, cy + START_RADIUS);
+                                const r2 = START_RADIUS * START_RADIUS;
+                                for (let yy = minY; yy <= maxY; yy++) {
+                                    for (let xx = minX; xx <= maxX; xx++) {
+                                        const dx = xx - cx, dy = yy - cy;
+                                        if (dx * dx + dy * dy <= r2) {
+                                            if (ownerGrid[yy][xx] !== null) return false;
+                                        }
+                                    }
+                                }
+                                return true;
+                            }
+                            // Prefer the canonical corner if it's clear.
+                            let spawn = null;
+                            const preferredCx = Math.floor(cornerX), preferredCy = Math.floor(cornerY);
+                            if (areaClear(preferredCx, preferredCy)) spawn = [preferredCx, preferredCy];
+                            else {
+                                // scan the board for the nearest clear center to the corner
+                                let best = null, bestDist = Infinity;
+                                for (let yy = START_RADIUS; yy < rows - START_RADIUS; yy++) {
+                                    for (let xx = START_RADIUS; xx < cols - START_RADIUS; xx++) {
+                                        if (!areaClear(xx, yy)) continue;
+                                        const d = Math.hypot(xx - preferredCx, yy - preferredCy);
+                                        if (d < bestDist) { bestDist = d; best = [xx, yy]; }
+                                    }
+                                }
+                                if (best) spawn = best;
+                            }
+                            if (!spawn) {
+                                // fallback: use the corner even if occupied
+                                spawn = [preferredCx, preferredCy];
+                            }
+                            // Place the fish at the chosen spawn and claim area
+                            slot.x = spawn[0] + 0.5; slot.y = spawn[1] + 0.5;
                             claimStartArea(slot, Math.floor(slot.x), Math.floor(slot.y));
                         }
                     });
