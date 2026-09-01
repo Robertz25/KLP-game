@@ -1826,6 +1826,9 @@
                             slot.heading = undefined;
                             const [sx, sy] = starts[slot.id];
                             slot.x = sx + 0.5; slot.y = sy + 0.5;
+                            // freed territory becomes neutral so a newly-joined human doesn't inherit
+                            // the bot's previous land — match respawnPlayer behaviour.
+                            for (let yy = 0; yy < rows; yy++) for (let xx = 0; xx < cols; xx++) if (ownerGrid[yy][xx] === slot.id) ownerGrid[yy][xx] = null;
                             claimStartArea(slot, Math.floor(slot.x), Math.floor(slot.y));
                         }
                     });

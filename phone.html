@@ -28,11 +28,13 @@
           dead.style.display = 'none';
           contact.style.display = 'none';
           status.textContent = 'Joining...';
-          // Clear saved session so server treats this as a fresh join.
-          try{ if(sessionKey) sessionStorage.removeItem(sessionKey); } catch(e){}
-          window.myPlayerId = null; window.myPlayerColor = null;
-          if (socket && socket.readyState === WebSocket.OPEN) send('join', { room: room.toUpperCase(), name: myName });
-          else { connect(); setTimeout(()=>{ if (socket && socket.readyState === WebSocket.OPEN) send('join', { room: room.toUpperCase(), name: myName }); }, 600); }
+        // show joystick immediately so controls appear after rejoin
+        joystick.style.display = 'block';
+        // Clear saved session so server treats this as a fresh join.
+        try{ if(sessionKey) sessionStorage.removeItem(sessionKey); } catch(e){}
+        window.myPlayerId = null; window.myPlayerColor = null;
+        if (socket && socket.readyState === WebSocket.OPEN) send('join', { room: room.toUpperCase(), name: myName });
+        else { connect(); setTimeout(()=>{ if (socket && socket.readyState === WebSocket.OPEN) send('join', { room: room.toUpperCase(), name: myName }); }, 600); }
         };
         function hideFreezeOverlay(){ freezePanel.style.display = 'none'; freezeOptions.innerHTML = ''; if (freezeTimeout) { clearTimeout(freezeTimeout); freezeTimeout = null; } }
         function showFreezeOffer(options){
@@ -94,6 +96,8 @@
                                 hasJoined = true;
                                 waiting.style.display = 'none';
                                 controller.style.display = 'flex';
+                                // ensure joystick is visible after rejoin/join
+                                joystick.style.display = 'block';
                                 const idx = Number(m.id.slice(1));
                                 const paletteNames = ['RED','BLUE','GREEN','YELLOW','PURPLE'];
                                 const displayName = paletteNames[idx-1] || ('P'+idx);
@@ -112,6 +116,8 @@
                                 fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><ellipse cx="32" cy="16" rx="26" ry="16" fill="${color}"/><polygon points="52,12 62,8 62,24 52,20" fill="${color}"/><circle cx="44" cy="10" r="3.8" fill="#fffdf8"/><circle cx="44" cy="10" r="1.6" fill="#18302c"/></svg>`;
                                 status.innerHTML = `<div style="font-weight:700;font-size:18px;color:var(--ink)">You are ${displayName}</div><div style="font-size:13px;color:#60726d">${pid?('Player '+pid):''}</div><div style="font-size:14px;color:#60726d">Game started</div>`;
                                 name.style.display = 'none'; save.style.display = 'none';
+                                // ensure joystick is visible when the round starts
+                                joystick.style.display = 'block';
                               }
                               if (m.type === 'freeze-offer') { showFreezeOffer(m.options); }
                               if (m.type === 'player-dead') {
