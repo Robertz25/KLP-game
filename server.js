@@ -264,7 +264,7 @@ const server = http.createServer((request, response) => {
                 response.writeHead(500);
                 return response.end('File unavailable');
             }
-            response.writeHead(200, {'Content-Type': 'application/javascript; charset=utf-8'});
+            response.writeHead(200, {'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store'});
             response.end(script);
         });
     }
@@ -298,7 +298,7 @@ const server = http.createServer((request, response) => {
                 page = page.replace(/<script/, `<script>window.LAN_ORIGIN='http://${lanAddress}:${port}';</script><script`);
             }
         }
-        response.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
+        response.writeHead(200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'});
         response.end(page);
     });
 });
