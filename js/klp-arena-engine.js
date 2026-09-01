@@ -274,6 +274,33 @@
         saveTotalScores();
     }
 
+    // The "Toppliste" panel on the host screen shows the all-time top 5 scores submitted
+    // through the post-game contact form (persisted server-side in Postgres), instead of just
+    // this browser's local totals — so it reflects everyone who has ever played, across
+    // devices/sessions. Refreshed periodically and right after a player dies/wins so the
+    // newest submission shows up quickly.
+    let lastTopScoresFetch = 0;
+    let topScoresCache = null;
+    function renderTopScores(rows) {
+        const lb = document.getElementById('leaderboard');
+        if (!lb) return;
+        if (!rows || !rows.length) {
+            lb.innerHTML = '<div class="row-meta">No scores yet</div>';
+            return;
+        }
+        lb.innerHTML = rows.map((row, i) => `<div class="player-row"><span class="dot" style="background:${colors[i % colors.length]}"></span><div>${row.name || 'Guest'}${row.company ? ` <span class="row-meta">(${row.company})</span>` : ''}</div><div class="player-percent">${Number(row.score || 0).toLocaleString()}</div></div>`).join('');
+    }
+    function fetchTopScores(force) {
+        const now = performance.now();
+        if (!force && now - lastTopScoresFetch < 4000) return;
+        lastTopScoresFetch = now;
+        fetch('/api/top-scores').then(r => r.json()).then(data => {
+            topScoresCache = data.scores || [];
+            renderTopScores(topScoresCache);
+        }).catch(() => { /* leaderboard is best-effort; ignore network errors */
+        });
+    }
+
     const hostOverrideKey = 'klp-fiske-host-override';
     // Track which human slot IDs we've already seen so newly joining players can be
     // given a fresh start-area/respawn when they arrive.
@@ -1699,21 +1726,9 @@
             const pct = total ? Math.round((counts[i] / total) * 100) : 0;
             return `<div class="player-row" style="${p.isOut ? 'opacity:.45' : ''}"><span class="dot" style="background:${colors[p.id]}"></span><div>${p.bot ? 'BOT · ' : ''}${playerLabel(p.id)}${p.isOut ? ' · UTE' : ''}<div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${colors[p.id]}"></div></div></div><div class="player-percent">${pct}%</div></div>`;
         }).join('');
-        const lb = document.getElementById('leaderboard');
-        if (lb) {
-            const order = players.map((p, i) => ({
-                p,
-                i,
-                score: scores[i],
-                total: totalScores[i]
-            })).sort((a, b) => b.score - a.score);
-            lb.innerHTML = order.map(({
-                                          p,
-                                          i,
-                                          score,
-                                          total
-                                      }) => `<div class="player-row"><span class="dot" style="background:${colors[p.id]}"></span><div>${scoreNames[i]}<div class="row-meta">Totalt: ${total.toLocaleString()}</div></div><div class="player-percent">${score.toLocaleString()}</div></div>`).join('');
-        }
+        // The leaderboard panel now shows the all-time top 5 DB-submitted scores (see
+        // fetchTopScores/renderTopScores above) instead of the current match's live totals.
+        fetchTopScores();
         const now = performance.now();
         const statusEl = document.getElementById('roundStatus');
         if (continuous) {
@@ -1928,6 +1943,11 @@
                 const targetId = Number(String(message.targetKey || '').slice(1)) - 1;
                 const target = players[targetId];
                 if (target) target.frozenUntil = performance.now() + 2000;
+            }
+            if (message.type === 'top-scores-updated') {
+                // A player just submitted the post-game contact form — refresh the
+                // "Toppliste" panel right away instead of waiting for the next poll.
+                fetchTopScores(true);
             }
             if (message.type === 'restart') {
                 round++;

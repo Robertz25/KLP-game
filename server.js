@@ -251,6 +251,17 @@ const server = http.createServer((request, response) => {
             tunnelStatus
         }));
     }
+    if (url.pathname === '/api/top-scores') {
+        response.writeHead(200, {'Content-Type': 'application/json', 'Cache-Control': 'no-store'});
+        if (!pool) return response.end(JSON.stringify({scores: []}));
+        return pool.query(
+            'SELECT name, company, score FROM contacts WHERE score IS NOT NULL ORDER BY score DESC, created_at DESC LIMIT 5'
+        ).then(({rows}) => response.end(JSON.stringify({scores: rows})))
+            .catch(err => {
+                console.error('[db] failed to fetch top scores', err);
+                response.end(JSON.stringify({scores: []}));
+            });
+    }
     if (url.pathname === '/qr') return QRCode.toBuffer(url.searchParams.get('data') || '', {
         width: 320,
         margin: 2
@@ -464,12 +475,16 @@ wss.on('connection', socket => {
         }
         if (message.type === 'contact') {
             const details = message.details || {};
+            const room = client.room;
             saveContact({
                 name: String(details.name || '').slice(0, 100),
                 company: String(details.company || '').slice(0, 120),
                 phone: String(details.phone || '').slice(0, 30),
                 score: Number.isFinite(client.lastScore) ? client.lastScore : null,
-                room: client.room ? client.room.code : null
+                room: room ? room.code : null
+            }).then(() => {
+                // Nudge the host to refresh its "Toppliste" panel immediately.
+                if (room && room.host) send(room.host, {type: 'top-scores-updated'});
             });
             return;
         }
