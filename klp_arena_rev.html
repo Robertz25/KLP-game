@@ -38,10 +38,14 @@
   <style>
   #fullscreenExit{display:none;position:fixed;top:12px;right:12px;z-index:9999;background:#fff;color:#111;border-radius:6px;padding:8px 12px;border:0;box-shadow:0 6px 18px rgba(0,0,0,.35);}
   #fullscreenBtn{background:#18302c;color:#fff;border:0;padding:8px 12px;border-radius:4px;cursor:pointer}
+  /* Fullscreen now targets the whole shell (board + side panel with QR/leaderboard/stats)
+     instead of just the canvas, so joining, high scores and live stats stay visible. */
+  #arenaRoot:fullscreen, #arenaRoot:-webkit-full-screen{width:100vw;height:100vh;max-width:none;padding:24px;box-sizing:border-box;background:linear-gradient(135deg,#f6f1e7,#e8f1ea 62%,#d4e6dc);overflow:auto;display:flex;flex-direction:column;justify-content:center}
+  #arenaRoot:fullscreen .layout, #arenaRoot:-webkit-full-screen .layout{width:100%}
   </style>
   </head>
 <body>
-  <main class="shell">
+  <main class="shell" id="arenaRoot">
     <header class="masthead">
       <div><div class="eyebrow">Local multiplayer prototype</div><h1>Fiskekampen</h1><div class="eyebrow" style="margin-top:6px">Ta territorium</div></div>
       <div class="status"><strong id="roundStatus">RUNDE 1 ? LIVE</strong><div id="topStats" style="text-align:right;color:var(--muted)"></div></div>
@@ -65,367 +69,24 @@
       </section>
       <aside class="side">
         <section class="panel"><h2>Spillere</h2><div class="player-list" id="players"></div></section>
-        <section class="panel"><h2>Kontroller</h2><div class="controls"><div><strong>P1 · RED</strong> WASD</div><div><strong>P2 · BLUE</strong> Arrows</div><div><strong>P3 · GREEN</strong> IJKL</div><div><strong>P4 · YELLOW</strong> TFGH</div></div></section>
+        <section class="panel" id="queuePanel" style="display:none"><h2>Venteliste</h2><div class="player-list" id="queueList"></div></section>
+        <section class="panel"><h2>Toppliste</h2><div class="player-list" id="leaderboard"></div></section>
+        <section class="panel" id="joinPanel" style="display:none;text-align:center"><h2>Bli med</h2><img id="qrImage" src="" alt="QR-kode for å bli med" style="width:180px;height:180px;border-radius:8px;background:#fff;padding:8px"><p class="row-meta" style="margin-top:8px">Skann for å ta over et bot-slot i en live 5-spiller match</p>
+          <div id="connectionMode" class="row-meta" style="font-weight:700;color:#1f7a59">Detecting network…</div>
+          <div style="text-align:left;margin-top:10px">
+            <label for="hostAddress" class="row-meta" style="display:block;margin-bottom:4px">Vertadresse for telefoner</label>
+            <div style="display:flex;gap:6px">
+              <input id="hostAddress" style="flex:1;padding:8px;border-radius:6px;border:1px solid #c9d7cc;font:11px Arial,sans-serif">
+              <button id="saveAddress" class="restart" style="padding:8px 10px">Bruk</button>
+            </div>
+            <div class="row-meta" style="margin-top:4px">Bruk den offentlige lenken over når den er klar — den virker uansett Wi-Fi-begrensninger. Skriv inn adresse manuelt bare hvis den heller ikke virker.</div>
+          </div>
+        </section>
+        <section class="panel"><h2>Kontroller</h2><div class="controls"><div><strong>P1 · RED</strong> WASD</div><div><strong>P2 · BLUE</strong> Arrows</div><div><strong>P3 · GREEN</strong> IJKL</div><div><strong>P4 · YELLOW</strong> TFGH</div><div><strong>P5 · PURPLE</strong> Numpad 4568</div></div></section>
       </aside>
     </div>
-  </main>
     <button id="fullscreenExit">Exit full screen</button>
-    <script>
-      (() => {
-      const canvas = document.getElementById('game');
-      const ctx = canvas.getContext('2d');
-      const cols = 40, rows = 24, tile = 28;
-      const colors = ['#df614d', '#3d77a8', '#3e996b', '#e1ad2f'];
-      const names = ['RED','BLUE','GREEN','YELLOW'];
-      const humanNames = {};
-      function playerLabel(id){ const p = players && players[id]; const custom = humanNames[id+1]; return (p && !p.bot && custom) ? custom : names[id]; }
-      const starts = [[1,1],[cols-2,rows-2],[cols-2,1],[1,rows-2]];
-      const keys = [ {up:'w',down:'s',left:'a',right:'d', bomb:' '}, {up:'arrowup',down:'arrowdown',left:'arrowleft',right:'arrowright', bomb:'enter'}, {up:'i',down:'k',left:'j',right:'l', bomb:'o'}, {up:'t',down:'g',left:'f',right:'h', bomb:'y'} ];
-
-      let grid, ownerGrid, players, boosts = [], boostsEnabledAt = 0, round=1, roundOver=false, lastTime=performance.now();
-      let isFullscreen = false;
-      let freezeItem = null, freezeSpawnAt = 0, freezeSpawned = false;
-      const held = new Set();
-      const remoteInputs = {};
-      const botIds = new Set();
-      let networkSocket = null;
-      const room = new URLSearchParams(location.search).get('room') || (new URLSearchParams(location.search).get('host') ? 'AUTO' : null);
-      const roundDuration = 60 * 1000; // 60s
-      let roundStart = performance.now();
-
-      function freshGrid(){
-        grid = Array.from({length:rows},()=>Array.from({length:cols},()=>0));
-        ownerGrid = Array.from({length:rows},()=>Array.from({length:cols},()=>null));
-      }
-
-      function reset(){
-        freshGrid(); roundOver=false; roundStart=performance.now();
-        players = starts.map(([x,y],i)=>({id:i,x:x+.5,y:y+.5,bot:botIds.has(i+1),aiTimer:0,aiDx:0,aiDy:0,speed:4.2,speedBoostUntil:0,frozenUntil:0}));
-        boosts = [];
-        boostsEnabledAt = performance.now() + 5000;
-        freezeItem = null; freezeSpawned = false;
-        freezeSpawnAt = roundStart + (1000 + Math.random() * 29000); // 1-30s into the round
-        players.forEach(p=>{ ownerGrid[Math.floor(p.y)][Math.floor(p.x)] = p.id; });
-        updatePanel();
-      }
-
-      function blocked(x,y,who){
-        if (x < .22 || y < .22 || x > cols-.22 || y > rows-.22) return true;
-        return false;
-      }
-
-      function movePlayer(p,dt,now){
-        if (p.frozenUntil && now < p.frozenUntil) { p.vx = 0; p.vy = 0; return; }
-        let dx=0,dy=0; const k=keys[p.id];
-        if (held.has(k.left)) dx--;
-        if (held.has(k.right)) dx++;
-        if (held.has(k.up)) dy--;
-        if (held.has(k.down)) dy++;
-        const remote = remoteInputs[p.id+1];
-        if (remote && (now - remote.t) < 600) { dx += remote.x; dy += remote.y; }
-        if (!dx && !dy) return;
-        const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
-        p.vx = dx; p.vy = dy;
-        const speed = (performance.now() < p.speedBoostUntil) ? p.speed * 1.6 : p.speed;
-        const nx = p.x + dx * speed * dt, ny = p.y + dy * speed * dt;
-        if (!blocked(nx,p.y,p.id)) p.x = nx;
-        if (!blocked(p.x,ny,p.id)) p.y = ny;
-        const gx = Math.floor(p.x), gy = Math.floor(p.y);
-        if (grid[gy]?.[gx] === 0) ownerGrid[gy][gx] = p.id;
-        collectBoost(p);
-        collectFreeze(p, now);
-      }
-
-      function frontierTarget(p){
-        const px = Math.floor(p.x);
-        const py = Math.floor(p.y);
-        const home = [[2,2],[cols-3,2],[cols-3,rows-3],[2,rows-3]][p.id] || [Math.floor(cols/2), Math.floor(rows/2)];
-        let best = null;
-        for (let y = 0; y < rows; y++) {
-          for (let x = 0; x < cols; x++) {
-            if (ownerGrid[y][x] === p.id) continue;
-            const distance = Math.abs(x - px) + Math.abs(y - py);
-            const homeBias = Math.abs(x - home[0]) + Math.abs(y - home[1]);
-            const score = distance + homeBias * 0.25;
-            if (!best || score < best.score) best = {x, y, score};
-          }
-        }
-        return best;
-      }
-
-      function spawnBoost(){
-        let spot = null;
-        for (let tries = 0; tries < 80 && !spot; tries++) {
-          const x = 1 + Math.floor(Math.random() * (cols - 2));
-          const y = 1 + Math.floor(Math.random() * (rows - 2));
-          if (ownerGrid[y][x] === null) spot = {x, y};
-        }
-        if (spot) boosts.push({x: spot.x, y: spot.y, expiresAt: performance.now() + 10000});
-      }
-
-      function collectBoost(p){
-        const index = boosts.findIndex(b => Math.hypot(p.x - (b.x + .5), p.y - (b.y + .5)) < .65);
-        if (index < 0) return;
-        boosts.splice(index, 1);
-        p.speedBoostUntil = performance.now() + 2500;
-        p.boostStartAt = performance.now();
-        if (Math.random() < .5) spawnBoost();
-      }
-
-      function spawnFreeze(){
-        let spot = null;
-        for (let tries = 0; tries < 80 && !spot; tries++) {
-          const x = 1 + Math.floor(Math.random() * (cols - 2));
-          const y = 1 + Math.floor(Math.random() * (rows - 2));
-          if (ownerGrid[y][x] === null) spot = {x, y};
-        }
-        if (spot) freezeItem = {x: spot.x, y: spot.y};
-      }
-
-      function collectFreeze(p, now){
-        if (!freezeItem) return;
-        if (Math.hypot(p.x - (freezeItem.x + .5), p.y - (freezeItem.y + .5)) >= .65) return;
-        freezeItem = null;
-        const others = players.filter(x => x.id !== p.id);
-        if (!others.length) return;
-        if (p.bot) {
-          // bots just pick a random opponent to freeze
-          const target = others[Math.floor(Math.random() * others.length)];
-          target.frozenUntil = now + 2000;
-          return;
-        }
-        if (networkSocket && networkSocket.readyState === WebSocket.OPEN && room) {
-          // hand the choice off to the human's phone controller
-          networkSocket.send(JSON.stringify({
-            type: 'freeze-offer',
-            playerKey: `p${p.id+1}`,
-            options: others.map(o => ({id: `p${o.id+1}`, color: colors[o.id], name: playerLabel(o.id)}))
-          }));
-        } else {
-          // no phone controller attached (local hot-seat play) — pick a random target
-          const target = others[Math.floor(Math.random() * others.length)];
-          target.frozenUntil = now + 2000;
-        }
-      }
-
-      function moveBot(p, dt, now){
-              if (p.frozenUntil && now < p.frozenUntil) { return; }
-              // sometimes pick a random unowned target to vary bot behaviour between rounds
-              let target = null;
-              if (Math.random() < 0.35) {
-                const candidates = [];
-                for (let y = 1; y < rows-1; y++) for (let x = 1; x < cols-1; x++) if (ownerGrid[y][x] === null && grid[y][x] === 0) candidates.push({x,y});
-                if (candidates.length) target = candidates[Math.floor(Math.random()*candidates.length)];
-              }
-              if (!target) target = frontierTarget(p) || {x: Math.floor(cols / 2), y: Math.floor(rows / 2)};
-              const px = Math.floor(p.x);
-              const py = Math.floor(p.y);
-              const dx = Math.sign(target.x - px);
-              const dy = Math.sign(target.y - py);
-              const speed = dt * ((p.speedBoostUntil && performance.now() < p.speedBoostUntil) ? p.speed * 1.6 : p.speed);
-              const step = speed;
-              const tries = [];
-              if (Math.abs(target.x - px) > Math.abs(target.y - py)) {
-                tries.push([dx, 0], [0, Math.sign(target.y - py)]);
-              } else {
-                tries.push([0, dy], [Math.sign(target.x - px), 0]);
-              }
-              tries.push([1,0], [-1,0], [0,1], [0,-1]);
-              let moved = false;
-        for (const [mx, my] of tries) {
-          const nx = p.x + mx * step;
-          const ny = p.y + my * step;
-          if (!blocked(nx, p.y, p.id) && mx !== 0) { p.x = nx; moved = true; p.aiDx = mx; p.aiDy = 0; break; }
-          if (!blocked(p.x, ny, p.id) && my !== 0) { p.y = ny; moved = true; p.aiDx = 0; p.aiDy = my; break; }
-        }
-        if (!moved) {
-          const spread = [[step,0],[-step,0],[0,step],[0,-step]];
-          for (const [sx, sy] of spread) {
-            const nx = p.x + sx;
-            const ny = p.y + sy;
-            if (!blocked(nx, ny, p.id)) { p.x = nx; p.y = ny; moved = true; p.aiDx = Math.sign(sx); p.aiDy = Math.sign(sy); break; }
-          }
-        }
-        if (!moved && Math.random() < 0.25) {
-          const choices = [[1,0],[-1,0],[0,1],[0,-1]];
-          const [fx, fy] = choices[Math.floor(Math.random() * choices.length)];
-          const nx = p.x + fx * step;
-          const ny = p.y + fy * step;
-          if (!blocked(nx, p.y, p.id)) { p.x = nx; p.aiDx = fx; p.aiDy = 0; }
-          if (!blocked(p.x, ny, p.id)) { p.y = ny; p.aiDx = 0; p.aiDy = fy; }
-        }
-        const gx = Math.floor(p.x), gy = Math.floor(p.y);
-        if (grid[gy]?.[gx] === 0) ownerGrid[gy][gx] = p.id;
-        collectBoost(p);
-        collectFreeze(p, now);
-      }
-
-      function tick(dt,now){ if (roundOver) return;
-        // purge stale remote inputs
-        for (const k in remoteInputs) { if (now - remoteInputs[k].t > 2500) delete remoteInputs[k]; }
-        players.forEach(p=>{ if (p.bot) moveBot(p,dt,now); else movePlayer(p,dt,now); });
-        for (let i = boosts.length - 1; i >= 0; i--) {
-          if (now > boosts[i].expiresAt) boosts.splice(i, 1);
-        }
-        if (now >= boostsEnabledAt && boosts.length < 4 && Math.random() < 0.018) spawnBoost();
-        if (!freezeSpawned && now >= freezeSpawnAt) { spawnFreeze(); freezeSpawned = true; }
-        if (now - roundStart >= roundDuration){
-          roundOver = true;
-          const counts = new Array(players.length).fill(0); let total = 0;
-          for (let y=0;y<rows;y++) for (let x=0;x<cols;x++){ total++; const owner = ownerGrid[y][x]; if (owner !== null) counts[owner]++; }
-          const percents = counts.map(c => total?Math.round((c/total)*100):0);
-          const winnerIndex = percents.indexOf(Math.max(...percents));
-          if (networkSocket && networkSocket.readyState===WebSocket.OPEN && players[winnerIndex] && !players[winnerIndex].bot) networkSocket.send(JSON.stringify({type:'player-won',playerKey:`p${winnerIndex+1}`}));
-        }
-      }
-
-      function drawFish(ctx,p,x,y,now){
-          ctx.save(); ctx.translate(x,y);
-          let ax = 0, ay = 0;
-          if (typeof p.aiDx === 'number') { ax = p.aiDx; ay = p.aiDy; }
-          if (typeof p.vx === 'number') { ax = p.vx; ay = p.vy; }
-          let angle = 0;
-          if (Math.abs(ax) > 1e-3 || Math.abs(ay) > 1e-3) angle = Math.atan2(ay, ax);
-          const facingLeft = Math.cos(angle) < 0;
-          if (facingLeft) { ctx.scale(-1,1); angle = Math.PI - angle; }
-          ctx.rotate(angle);
-          ctx.fillStyle = 'rgba(22,48,43,.18)'; ctx.beginPath(); ctx.ellipse(0,16,16,6,0,0,Math.PI*2); ctx.fill();
-          ctx.fillStyle = colors[p.id] || '#888'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(0,0,18,12,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
-          const wag = Math.sin(now/120 + p.id) * 0.6; ctx.save(); ctx.translate(-14,0); ctx.rotate(wag); ctx.fillStyle = colors[p.id] || '#888'; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-12,8); ctx.lineTo(-12,-8); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-          ctx.fillStyle = '#fffdf8'; ctx.beginPath(); ctx.arc(7,-3,3.5,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#18302c'; ctx.beginPath(); ctx.arc(7,-3,1.4,0,Math.PI*2); ctx.fill();
-          // mouth: briefly opens wide then closes right after a speed boost is collected
-          let mouthOpen = 0;
-          if (p.boostStartAt) { const elapsed = now - p.boostStartAt; if (elapsed >= 0 && elapsed < 400) mouthOpen = Math.sin((elapsed / 400) * Math.PI); }
-          ctx.strokeStyle = '#18302c'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.arc(15,4,3,0.2,Math.PI-0.2); ctx.stroke();
-          if (mouthOpen > 0.05) { ctx.fillStyle = '#18302c'; ctx.beginPath(); ctx.ellipse(15,5,3.2,2+mouthOpen*3.5,0,0,Math.PI*2); ctx.fill(); }
-          if (p.speedBoostUntil && performance.now() < p.speedBoostUntil) { ctx.save(); ctx.translate(12,-14); ctx.fillStyle = '#111'; ctx.strokeStyle = '#f2c94c'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-4,-10); ctx.lineTo(4,-10); ctx.lineTo(-1,-2); ctx.lineTo(6,8); ctx.lineTo(-4,0); ctx.lineTo(2,0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
-          if (p.shield){ ctx.strokeStyle='#f2c94c'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(0,0,26,0,Math.PI*2); ctx.stroke(); }
-          if (p.frozenUntil && now < p.frozenUntil) {
-            ctx.fillStyle = 'rgba(150,220,255,.55)'; ctx.strokeStyle='#e8fbff'; ctx.lineWidth=1.5;
-            ctx.beginPath(); ctx.ellipse(0,0,20,14,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
-            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.3;
-            for (let i=0;i<3;i++){ const ang = (Math.PI*2/3)*i; ctx.save(); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(0,9); ctx.moveTo(-4,-5); ctx.lineTo(4,-5); ctx.moveTo(-4,5); ctx.lineTo(4,5); ctx.stroke(); ctx.restore(); }
-          }
-          ctx.restore();
-        }
-      function draw(){ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#07121a'; ctx.fillRect(0,0,canvas.width,canvas.height); for (let y=0;y<rows;y++) for (let x=0;x<cols;x++){ const owner = ownerGrid[y][x]; if (owner===null){ ctx.fillStyle='#0f1a1f'; ctx.fillRect(x*tile,y*tile,tile,tile); ctx.strokeStyle='rgba(255,255,255,.03)'; ctx.strokeRect(x*tile+.5,y*tile+.5,tile-1,tile-1); } else { ctx.fillStyle = colors[owner]; ctx.fillRect(x*tile,y*tile,tile,tile); } }
-        boosts.forEach(b => {
-                  const t = performance.now();
-                  const bob = Math.sin(t / 180 + b.x + b.y) * 2;
-                  ctx.save();
-                  ctx.translate((b.x + .5) * tile, (b.y + .5) * tile + bob);
-                  ctx.shadowColor = 'rgba(242,201,76,0.55)';
-                  ctx.shadowBlur = 12;
-                  ctx.fillStyle = '#111';
-                  ctx.beginPath();
-                  ctx.moveTo(-6, -8);
-                  ctx.lineTo(2, -8);
-                  ctx.lineTo(-2, 0);
-                  ctx.lineTo(6, 0);
-                  ctx.lineTo(-4, 12);
-                  ctx.lineTo(-1, 2);
-                  ctx.lineTo(-6, 2);
-                  ctx.closePath();
-                  ctx.fill();
-                  ctx.shadowBlur = 0;
-                  ctx.strokeStyle = '#f2c94c';
-                  ctx.lineWidth = 2.5;
-                  ctx.stroke();
-                  ctx.restore();
-                });
-        if (freezeItem) {
-          const t = performance.now();
-          const bob = Math.sin(t / 180 + freezeItem.x + freezeItem.y) * 2;
-          ctx.save();
-          ctx.translate((freezeItem.x + .5) * tile, (freezeItem.y + .5) * tile + bob);
-          ctx.shadowColor = 'rgba(140,220,255,0.65)';
-          ctx.shadowBlur = 12;
-          ctx.fillStyle = '#bdeeff';
-          ctx.beginPath(); ctx.arc(0,0,9,0,Math.PI*2); ctx.fill();
-          ctx.shadowBlur = 0;
-          ctx.strokeStyle = '#0b5c78'; ctx.lineWidth = 1.8; ctx.lineCap='round';
-          for (let i=0;i<3;i++){ const ang = (Math.PI/3)*i; ctx.save(); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(0,8); ctx.moveTo(-3.5,-4.5); ctx.lineTo(3.5,-4.5+.001); ctx.moveTo(-3.5,4.5); ctx.lineTo(3.5,4.5); ctx.stroke(); ctx.restore(); }
-          ctx.restore();
-        }
-        players.forEach(p=>{ const x = p.x * tile, y = p.y * tile; drawFish(ctx,p,x,y,performance.now()); });
-        if (isFullscreen && !roundOver) {
-          const remaining = Math.max(0, Math.ceil((roundDuration - (performance.now() - roundStart))/1000));
-          const label = `${String(Math.floor(remaining/60)).padStart(1,'0')}:${String(remaining%60).padStart(2,'0')}`;
-          ctx.save();
-          ctx.font = '700 26px Arial';
-          const textWidth = ctx.measureText(label).width;
-          const pillW = textWidth + 40, pillH = 44, pillX = canvas.width/2 - pillW/2, pillY = 14;
-          ctx.fillStyle = 'rgba(7,18,26,.72)';
-          ctx.beginPath();
-          ctx.roundRect ? ctx.roundRect(pillX, pillY, pillW, pillH, 22) : ctx.rect(pillX, pillY, pillW, pillH);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; ctx.stroke();
-          ctx.fillStyle = '#fffdf8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(label, canvas.width/2, pillY + pillH/2 + 1);
-          ctx.restore();
-        }
-        if (isFullscreen) {
-          const counts = new Array(players.length).fill(0); let total=0;
-          for (let y=0;y<rows;y++) for (let x=0;x<cols;x++){ total++; const owner = ownerGrid[y][x]; if (owner!==null) counts[owner]++; }
-          ctx.save();
-          const rowH = 40, panelW = 168, panelX = canvas.width - panelW - 14; let panelY = 14;
-          const panelH = players.length * rowH + 12;
-          ctx.fillStyle = 'rgba(7,18,26,.72)';
-          ctx.beginPath();
-          ctx.roundRect ? ctx.roundRect(panelX, panelY, panelW, panelH, 16) : ctx.rect(panelX, panelY, panelW, panelH);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; ctx.stroke();
-          players.forEach((p,i)=>{
-            const pct = total?Math.round((counts[i]/total)*100):0;
-            const rowY = panelY + 6 + i*rowH;
-            ctx.fillStyle = colors[p.id] || '#888';
-            ctx.beginPath(); ctx.arc(panelX+18, rowY+rowH/2, 7, 0, Math.PI*2); ctx.fill();
-            ctx.strokeStyle='#000'; ctx.lineWidth=1.5; ctx.stroke();
-            ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillStyle='#fffdf8';
-            ctx.font='700 13px Arial';
-            ctx.fillText(`${playerLabel(p.id)}`.slice(0,10), panelX+32, rowY+13);
-            ctx.font='700 15px Arial';
-            ctx.fillText(`${pct}%`, panelX+32, rowY+29);
-            const barX = panelX+80, barW = panelW-96, barY = rowY+23, barH = 6;
-            ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(barX, barY, barW, barH);
-            ctx.fillStyle = colors[p.id] || '#888'; ctx.fillRect(barX, barY, barW*(pct/100), barH);
-          });
-          ctx.restore();
-        }
-        if (roundOver){ ctx.fillStyle='rgba(24,48,44,.78)'; ctx.fillRect(0,0,canvas.width,canvas.height); const counts = new Array(players.length).fill(0); let total=0; for (let y=0;y<rows;y++) for (let x=0;x<cols;x++){ total++; const owner = ownerGrid[y][x]; if (owner!==null) counts[owner]++; } const percents = counts.map(c => total?Math.round((c/total)*100):0); const winnerIndex = percents.indexOf(Math.max(...percents)); ctx.textAlign='center'; ctx.fillStyle='#fffdf8'; ctx.font='700 38px Georgia'; ctx.fillText(players[winnerIndex]?playerLabel(winnerIndex)+' VINNER':'UAVGJORT', canvas.width/2, canvas.height/2+12); } }
-
-      function updatePanel(){ const el = document.getElementById('players'); const counts = new Array(players.length).fill(0); let total=0; for (let y=0;y<rows;y++) for (let x=0;x<cols;x++){ total++; const owner = ownerGrid[y][x]; if (owner!==null) counts[owner]++; } el.innerHTML = players.map((p,i)=>{ const pct = total?Math.round((counts[i]/total)*100):0; return `<div class="player-row"><span class="dot" style="background:${colors[p.id]}"></span><div>${p.bot?'BOT · ':''}${playerLabel(p.id)}<div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${colors[p.id]}"></div></div></div><div class="player-percent">${pct}%</div></div>`; }).join(''); const now = performance.now(); const statusEl = document.getElementById('roundStatus'); if (!roundOver){ const remaining = Math.max(0, Math.ceil((roundDuration - (now - roundStart))/1000)); statusEl.textContent = `RUNDE ${round} · ${remaining}s`; } else { statusEl.textContent = `RUNDE ${round} · FERDIG`; } }
-
-      function frame(now){ const dt = Math.min(.035,(now - lastTime)/1000||0); lastTime = now; tick(dt,now); draw(now); updatePanel(); requestAnimationFrame(frame); }
-
-      // Use capture phase and always prevent default for the game's control keys so a
-      // focused button (e.g. Restart/Fullscreen) can't be re-triggered by Enter/Space,
-      // which previously caused the round to silently reset and look like "movement stopped".
-      const controlKeys = new Set(['w','a','s','d',' ','arrowup','arrowdown','arrowleft','arrowright','enter','i','j','k','l','o','t','f','g','h','y']);
-      window.addEventListener('keydown', e=>{ const key = e.key.toLowerCase(); held.add(key); if (controlKeys.has(key)) e.preventDefault(); }, true);
-      window.addEventListener('keyup', e=>{ const key = e.key.toLowerCase(); held.delete(key); if (controlKeys.has(key)) e.preventDefault(); }, true);
-
-      document.getElementById('restart').addEventListener('click', (e)=>{
-        e.currentTarget.blur();
-        if (networkSocket?.readyState===WebSocket.OPEN) { networkSocket.send(JSON.stringify({type:'restart'})); }
-        else { round++; reset(); }
-      });
-
-      document.getElementById('back')?.addEventListener('click', (e)=>{ e.currentTarget.blur(); if(networkSocket?.readyState===WebSocket.OPEN){ try{ networkSocket.send(JSON.stringify({type:'close-room'})); }catch(e){} setTimeout(()=>location.href='/',250); } else location.href='/'; });
-
-      if (room){ const socket = new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host); networkSocket = socket; socket.addEventListener('open', ()=> socket.send(JSON.stringify({type:'host-reconnect', room}))); socket.addEventListener('message', event=>{ const message = JSON.parse(event.data); if (message.type==='reconnected'){ botIds.clear(); for (let i=1;i<=starts.length;i++) if (!message.humanIds.includes(i)) botIds.add(i); reset(); } if (message.type==='players'){ message.players.forEach(p=>{ humanNames[Number(p.id.slice(1))] = p.name; }); } if (message.type==='remote-input'){ if (Number.isFinite(message.input.x) && Number.isFinite(message.input.y)) remoteInputs[message.id.slice(1)] = {x: message.input.x, y: message.input.y, t: performance.now()}; } if (message.type==='freeze-pick'){ const targetId = Number(String(message.targetKey||'').slice(1)) - 1; const target = players[targetId]; if (target) target.frozenUntil = performance.now() + 2000; } if (message.type==='restart'){ round++; reset(); } }); }
-
-            // fullscreen controls
-            const fsBtnEl = document.getElementById('fullscreenBtn'); const fsExitEl = document.getElementById('fullscreenExit');
-            if (fsBtnEl) fsBtnEl.addEventListener('click', (e)=>{ e.currentTarget.blur(); const el = document.getElementById('game'); if (el.requestFullscreen) el.requestFullscreen(); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); });
-            if (fsExitEl) fsExitEl.addEventListener('click', (e)=>{ e.currentTarget.blur(); if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); });
-            document.addEventListener('fullscreenchange', ()=>{ isFullscreen = !!document.fullscreenElement; if (document.fullscreenElement) fsExitEl.style.display = 'block'; else fsExitEl.style.display = 'none'; });
-
-            // set canvas drawing size to tile grid
-            canvas.width = cols * tile; canvas.height = rows * tile;
-            reset(); requestAnimationFrame(frame);
-    })();
-  </script>
+  </main>
+    <script src="/js/klp-arena-engine.js"></script>
 </body>
 </html>
