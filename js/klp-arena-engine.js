@@ -288,7 +288,7 @@
             lb.innerHTML = '<div class="row-meta">No scores yet</div>';
             return;
         }
-        lb.innerHTML = rows.map((row, i) => `<div class="player-row"><span class="dot" style="background:${colors[i % colors.length]}"></span><div>${row.name || 'Guest'}${row.company ? ` <span class="row-meta">(${row.company})</span>` : ''}</div><div class="player-percent">${Number(row.score || 0).toLocaleString()}</div></div>`).join('');
+        lb.innerHTML = rows.map((row, i) => `<div class="player-row"><span class="dot" style="background:${colors[i % colors.length]}"></span><div>${row.name || 'Guest'}${row.company ? ` <span class="row-meta">(${row.company})</span>` : ''}</div><div class="player-percent" style="color:#0b1a1f">${Number(row.score || 0).toLocaleString()}</div></div>`).join('');
     }
     function fetchTopScores(force) {
         const now = performance.now();
