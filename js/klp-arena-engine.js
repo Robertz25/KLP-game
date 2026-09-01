@@ -55,6 +55,12 @@
     // Minimum player/bot count: the board is never allowed to have fewer than this many
     // fish in play, so it always feels alive even before any humans join.
     const minPlayers = 6;
+    // Only the first 4 corners (RED/BLUE/GREEN/YELLOW) are ever auto-filled with bots.
+    // The last two corners (PURPLE/TEAL) stay empty/unclaimed — no bot roaming them, no
+    // territory owned — until a 5th/6th human actually joins, at which point they get
+    // their own fresh starting point instead of "taking over" a bot that was never
+    // there. This keeps a small match (≤4 people) from looking like it's mostly bots.
+    const CORE_SLOTS = 4;
 
     let grid, ownerGrid, players, boosts = [], boostsEnabledAt = 0, round = 1, roundOver = false,
         lastTime = performance.now();
@@ -442,27 +448,36 @@
         roundOver = false;
         roundStart = performance.now();
         dangerWasClose = false;
-        players = starts.map(([x, y], i) => ({
-            id: i,
-            x: x + .5,
-            y: y + .5,
-            bot: botIds.has(i + 1),
-            aiTimer: 0,
-            aiDx: 0,
-            aiDy: 0,
-            speed: 7.5,
-            speedBoostUntil: 0,
-            frozenUntil: 0,
-            trail: [],
-            isOut: false,
-            lastCell: null
-        }));
+        players = starts.map(([x, y], i) => {
+            // Extra (5th/6th) corners start inactive — no bot, no claimed ground — unless
+            // a human is already known to occupy that slot (e.g. this reset happens right
+            // after a host reconnect where humans were already mid-match).
+            const isExtra = i >= CORE_SLOTS;
+            const active = !isExtra || botIds.has(i + 1) || knownHumanIds.has(i + 1);
+            return {
+                id: i,
+                x: x + .5,
+                y: y + .5,
+                bot: botIds.has(i + 1),
+                active,
+                aiTimer: 0,
+                aiDx: 0,
+                aiDy: 0,
+                speed: 7.5,
+                speedBoostUntil: 0,
+                frozenUntil: 0,
+                trail: [],
+                isOut: !active,
+                lastCell: null
+            };
+        });
         boosts = [];
         boostsEnabledAt = performance.now() + 5000;
         freezeItem = null;
         freezeSpawned = false;
         freezeSpawnAt = roundStart + (1000 + Math.random() * 29000); // 1-30s into the round
         players.forEach(p => {
+            if (!p.active) return;
             claimStartArea(p, Math.floor(p.x), Math.floor(p.y));
         });
         if (!continuous) {
@@ -1150,6 +1165,13 @@
             networkSocket.send(JSON.stringify({type: 'player-dead', playerKey: `p${p.id + 1}`, score: scores[p.id]}));
         }
         if (continuous) {
+            if (p.id >= CORE_SLOTS) {
+                // Extra (5th/6th) slot: max 4 bots means a defeated human here is never
+                // handed to a bot — the corner just goes empty/unclaimed again until a
+                // human takes it over fresh (see the 'players' message handler).
+                p.active = false;
+                return;
+            }
             // Keep the world alive: a defeated human's slot is taken over by a bot so the
             // board always has four fish in play, and the slot respawns after a short beat.
             if (!p.bot) botIds.add(p.id + 1);
@@ -1649,10 +1671,11 @@
                 const owner = ownerGrid[y][x];
                 if (owner !== null) counts[owner]++;
             }
+            const visiblePlayers = players.filter(p => p.active !== false);
             ctx.save();
             const rowH = 40, panelW = 168, panelX = canvas.width - panelW - 14;
             let panelY = 14;
-            const panelH = players.length * rowH + 12;
+            const panelH = visiblePlayers.length * rowH + 12;
             ctx.fillStyle = 'rgba(7,18,26,.72)';
             ctx.beginPath();
             ctx.roundRect ? ctx.roundRect(panelX, panelY, panelW, panelH, 16) : ctx.rect(panelX, panelY, panelW, panelH);
@@ -1660,8 +1683,8 @@
             ctx.strokeStyle = 'rgba(255,255,255,.25)';
             ctx.lineWidth = 1.5;
             ctx.stroke();
-            players.forEach((p, i) => {
-                const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+            visiblePlayers.forEach((p, i) => {
+                const pct = total ? Math.round((counts[p.id] / total) * 100) : 0;
                 const rowY = panelY + 6 + i * rowH;
                 ctx.fillStyle = colors[p.id] || '#888';
                 ctx.beginPath();
@@ -1728,9 +1751,9 @@
             const owner = ownerGrid[y][x];
             if (owner !== null) counts[owner]++;
         }
-        el.innerHTML = players.map((p, i) => {
-            const pct = total ? Math.round((counts[i] / total) * 100) : 0;
-            return `<div class="player-row" style="${p.isOut ? 'opacity:.45' : ''}"><span class="dot" style="background:${colors[p.id]}"></span><div>${p.bot ? 'BOT · ' : ''}${playerLabel(p.id)}${p.isOut ? ' · UTE' : ''}<div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${colors[p.id]}"></div></div></div><div class="player-percent">${scores[i].toLocaleString()}</div></div>`;
+        el.innerHTML = players.filter(p => p.active !== false).map((p, i) => {
+            const pct = total ? Math.round((counts[p.id] / total) * 100) : 0;
+            return `<div class="player-row" style="${p.isOut ? 'opacity:.45' : ''}"><span class="dot" style="background:${colors[p.id]}"></span><div>${p.bot ? 'BOT · ' : ''}${playerLabel(p.id)}${p.isOut ? ' · UTE' : ''}<div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${colors[p.id]}"></div></div></div><div class="player-percent">${scores[p.id].toLocaleString()}</div></div>`;
         }).join('');
         // The leaderboard panel now shows the all-time top 5 DB-submitted scores (see
         // fetchTopScores/renderTopScores above) instead of the current match's live totals.
@@ -1853,7 +1876,7 @@
                 continuous = true;
                 updateJoinPanel();
                 botIds.clear();
-                for (let i = 1; i <= starts.length; i++) botIds.add(i);
+                for (let i = 1; i <= CORE_SLOTS; i++) botIds.add(i);
                 reset();
             }
             if (message.type === 'reconnected') {
@@ -1865,7 +1888,12 @@
                 continuous = true;
                 updateJoinPanel();
                 botIds.clear();
-                for (let i = 1; i <= starts.length; i++) if (!message.humanIds.includes(i)) botIds.add(i);
+                for (let i = 1; i <= CORE_SLOTS; i++) if (!message.humanIds.includes(i)) botIds.add(i);
+                // Extra (5th/6th) slots aren't bot-fillable, so reset() only activates them
+                // when they're already known to be human — make sure any humans reported by
+                // the server as already occupying those slots are recognised as such even on
+                // a fresh page load (where knownHumanIds would otherwise still be empty).
+                (message.humanIds || []).forEach(id => knownHumanIds.add(id));
                 reset();
             }
             if (message.type === 'players') {
@@ -1884,6 +1912,7 @@
                             botIds.delete(id);
                             slot.bot = false;
                             // clear any death state and trails, then try to place at a clear start and claim area
+                            slot.active = true;
                             slot.isOut = false;
                             slot.trail = [];
                             slot.lastCell = null;
