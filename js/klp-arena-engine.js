@@ -1114,7 +1114,7 @@
         spawnParticles(p.x * tile, p.y * tile, colors[p.id] || '#fff', 22, {life: 650, maxSpeed: 140, size: 3});
         if (killer && killer.id !== p.id) addScore(killer.id, KILL_BONUS);
         if (networkSocket && networkSocket.readyState === WebSocket.OPEN && room && !p.bot) {
-            networkSocket.send(JSON.stringify({type: 'player-dead', playerKey: `p${p.id + 1}`}));
+            networkSocket.send(JSON.stringify({type: 'player-dead', playerKey: `p${p.id + 1}`, score: scores[p.id]}));
         }
         if (continuous) {
             // Keep the world alive: a defeated human's slot is taken over by a bot so the
@@ -1169,7 +1169,8 @@
             const winnerIndex = percents.indexOf(Math.max(...percents));
             if (networkSocket && networkSocket.readyState === WebSocket.OPEN && players[winnerIndex] && !players[winnerIndex].bot) networkSocket.send(JSON.stringify({
                 type: 'player-won',
-                playerKey: `p${winnerIndex + 1}`
+                playerKey: `p${winnerIndex + 1}`,
+                score: scores[winnerIndex]
             }));
             return;
         }
@@ -1179,7 +1180,8 @@
             const winner = alive[0];
             if (winner && networkSocket && networkSocket.readyState === WebSocket.OPEN && !winner.bot) networkSocket.send(JSON.stringify({
                 type: 'player-won',
-                playerKey: `p${winner.id + 1}`
+                playerKey: `p${winner.id + 1}`,
+                score: scores[winner.id]
             }));
         }
     }

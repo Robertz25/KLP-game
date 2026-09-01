@@ -6,6 +6,44 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const QRCode = require('qrcode');
 const WebSocket = require('ws');
+const { Pool } = require('pg');
+
+// Optional Postgres storage for the post-game "leave your details" form. Only enabled when
+// DATABASE_URL is set (e.g. on Render, where a linked Postgres database injects this env var
+// automatically). Locally, without DATABASE_URL, contact submissions are just logged instead
+// of crashing the server.
+const databaseUrl = (process.env.DATABASE_URL || '').trim();
+const pool = databaseUrl ? new Pool({
+    connectionString: databaseUrl,
+    // Render's managed Postgres requires SSL; rejectUnauthorized:false avoids needing the CA cert.
+    ssl: { rejectUnauthorized: false }
+}) : null;
+if (pool) {
+    pool.query(`CREATE TABLE IF NOT EXISTS contacts (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        phone TEXT,
+        score INTEGER,
+        room TEXT,
+        created_at TIMESTAMPTZ DEFAULT now()
+    )`).then(() => console.log('[db] contacts table ready')).catch(err => console.error('[db] failed to create contacts table', err));
+} else {
+    console.warn('[db] DATABASE_URL not set — contact form submissions will only be logged, not stored');
+}
+async function saveContact({ name, phone, score, room }) {
+    if (!pool) {
+        console.log('[contact] (no DATABASE_URL, not saved)', { name, phone, score, room });
+        return;
+    }
+    try {
+        await pool.query(
+            'INSERT INTO contacts (name, phone, score, room) VALUES ($1, $2, $3, $4)',
+            [name, phone, score, room]
+        );
+    } catch (err) {
+        console.error('[db] failed to save contact', err);
+    }
+}
 
 const root = __dirname;
 const port = Number(process.env.PORT) || 3000;
@@ -244,7 +282,6 @@ const server = http.createServer((request, response) => {
         if (filename === 'phone.html') page = page.replace("name.style.display='block';save.style.display='block';", "name.style.display='none';save.style.display='none';");
         if (filename === 'phone.html') page = page.replace("if(m.type==='player-dead'){", "if(m.type==='player-dead'||m.type==='player-won'){dead.textContent=m.type==='player-won'?'You won!':'You are out';");
         if (filename === 'phone.html') page = page.replace("save.onclick=()=>send('rename',{name:name.value.trim()});", "save.onclick=()=>{if(name.value.trim()){send('rename',{name:name.value.trim()});name.style.display='none';save.style.display='none';}};");
-        if (filename === 'phone.html') page = page.replace('</body>', '<script>(function(){const submittedKey="klp-arena-contact-submitted",form=document.querySelector("#contact"),death=document.querySelector("#dead"),thanks=document.querySelector("#thanks");if(!form)return;const alreadySubmitted=()=>localStorage.getItem(submittedKey)==="true";const showThankYou=()=>{if(!alreadySubmitted())return;form.style.display="none";if(death){death.style.display="none";death.textContent="You are out"}if(thanks)thanks.style.display="block"};form.addEventListener("submit",()=>{localStorage.setItem(submittedKey,"true")});new MutationObserver(showThankYou).observe(form,{attributes:true,attributeFilter:["style"]});showThankYou()})();</script></body>');
         // When the lobby or game page is opened via localhost/127.0.0.1 (typical when running the
         // server locally), the QR code would otherwise encode "localhost", which a phone on
         // the same Wi-Fi network cannot resolve to the host machine. Inject the detected LAN
@@ -420,14 +457,22 @@ wss.on('connection', socket => {
             announce(client.room);
             return;
         }
-        if (message.type === 'contact' && client.role === 'player') {
+        if (message.type === 'contact') {
+            const details = message.details || {};
+            saveContact({
+                name: String(details.name || '').slice(0, 100),
+                phone: String(details.phone || '').slice(0, 30),
+                score: Number.isFinite(client.lastScore) ? client.lastScore : null,
+                room: client.room ? client.room.code : null
+            });
             return;
         }
         if (message.type === 'player-dead' && client.role === 'host') {
             const room = client.room;
             const player = room.clients.get(message.playerKey);
             if (player) {
-                send(player, {type: 'player-dead'});
+                player.lastScore = Number.isFinite(message.score) ? message.score : null;
+                send(player, {type: 'player-dead', score: player.lastScore});
                 // A dead fish's slot is taken over by a bot on the game board immediately, so
                 // free the network slot right away too — that's what lets someone waiting in
                 // the queue jump straight into the vacated spot instead of the room staying
@@ -443,7 +488,10 @@ wss.on('connection', socket => {
         }
         if (message.type === 'player-won' && client.role === 'host') {
             const player = client.room.clients.get(message.playerKey);
-            if (player) send(player, {type: 'player-won'});
+            if (player) {
+                player.lastScore = Number.isFinite(message.score) ? message.score : null;
+                send(player, {type: 'player-won', score: player.lastScore});
+            }
             return;
         }
         if (message.type === 'freeze-offer' && client.role === 'host') {
