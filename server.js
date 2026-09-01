@@ -194,8 +194,16 @@ const server = http.createServer((request, response) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
     if (url.pathname === '/net-info') {
         response.writeHead(200, {'Content-Type': 'application/json', 'Cache-Control': 'no-store'});
+        // Prefer the request's public-facing origin (host + proto) when available so
+        // deployed instances show their public URL instead of the server's internal LAN IP.
+        const forwardedProto = request.headers['x-forwarded-proto'] || (request.socket && request.socket.encrypted ? 'https' : 'http');
+        const hostHeader = String(request.headers.host || '');
+        const hostOrigin = hostHeader ? `${forwardedProto}://${hostHeader}` : null;
+        const lan = /^(localhost|127\.0\.0\.1|\[::1])(:\d+)?$/i.test(hostHeader)
+            ? `http://${lanAddress}:${port}`
+            : (hostOrigin || `http://${lanAddress}:${port}`);
         return response.end(JSON.stringify({
-            lanOrigin: `http://${lanAddress}:${port}`,
+            lanOrigin: lan,
             publicOrigin,
             tunnelStatus
         }));
