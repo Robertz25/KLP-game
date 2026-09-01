@@ -45,10 +45,16 @@
         left: 'f',
         right: 'h',
         bomb: 'y'
-    }, {up: '8', down: '5', left: '4', right: '6', bomb: '7'}];
+    }, {up: '8', down: '5', left: '4', right: '6', bomb: '7'}, {
+        up: 'u',
+        down: 'm',
+        left: 'n',
+        right: 'b',
+        bomb: 'v'
+    }];
     // Minimum player/bot count: the board is never allowed to have fewer than this many
     // fish in play, so it always feels alive even before any humans join.
-    const minPlayers = 5;
+    const minPlayers = 6;
 
     let grid, ownerGrid, players, boosts = [], boostsEnabledAt = 0, round = 1, roundOver = false,
         lastTime = performance.now();
