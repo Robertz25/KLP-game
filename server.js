@@ -538,4 +538,11 @@ wss.on('connection', socket => {
     });
 });
 server.listen(port, '0.0.0.0', () => {
+    const bind = `0.0.0.0:${port}`;
+    console.log(`Server listening on ${bind}`);
+    // Also print the detected LAN IP and any public tunnel URL so it's obvious which
+    // addresses can be used to reach the server from other devices.
+    console.log(`Detected LAN address: http://${lanAddress}:${port}`);
+    if (publicOrigin) console.log(`Public tunnel URL: ${publicOrigin}`);
+    console.log(`Localhost: http://localhost:${port}`);
 });
