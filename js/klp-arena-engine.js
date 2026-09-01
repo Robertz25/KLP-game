@@ -284,7 +284,7 @@
         boostsEnabledAt = performance.now() + 5000;
         freezeItem = null; freezeSpawned = false;
         freezeSpawnAt = roundStart + (1000 + Math.random() * 29000); // 1-30s into the round
-        players.forEach(p=>{ claimStartArea(p, Math.floor(p.y), Math.floor(p.x)); });
+        players.forEach(p=>{ claimStartArea(p, Math.floor(p.x), Math.floor(p.y)); });
         if (!continuous) { scores.fill(0); scoreNames.forEach((_, i) => { scoreNames[i] = playerLabel(i); }); }
         updatePanel();
       }
@@ -298,7 +298,7 @@
         // freed territory becomes neutral again so it's up for grabs, matching paper.io's
         // rule that a defeated player's land opens back up rather than staying claimed forever.
         for (let yy=0; yy<rows; yy++) for (let xx=0; xx<cols; xx++) if (ownerGrid[yy][xx] === p.id) ownerGrid[yy][xx] = null;
-        claimStartArea(p, Math.floor(p.y), Math.floor(p.x));
+        claimStartArea(p, Math.floor(p.x), Math.floor(p.y));
       }
 
       function blocked(x,y,who){
