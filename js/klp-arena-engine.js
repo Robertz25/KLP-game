@@ -194,6 +194,14 @@
 
     const remoteInputs = {};
     const botIds = new Set();
+    // Hosted (QR) rooms start with at most this many bot-driven fish. Slots 5 and 6 are
+    // never pre-filled with bots — they only come into existence (a fresh starting point
+    // gets created) once a 5th/6th actual human has joined via QR code, so the board
+    // never shows "phantom" bots nobody can ever take over.
+    const maxBotSlots = 4;
+    // How many player slots currently exist on the board in continuous (hosted) mode.
+    // Grows from maxBotSlots up to starts.length as real humans join beyond slot 4.
+    let activeSlotCount = starts.length;
     let networkSocket = null;
     // A host tab that gets reloaded (accidental refresh, browser restart, laptop sleep/
     // wake, etc.) with no ?room= in the URL used to always spin up a brand-new room —
@@ -442,7 +450,11 @@
         roundOver = false;
         roundStart = performance.now();
         dangerWasClose = false;
-        players = starts.map(([x, y], i) => ({
+        // Hosted rooms start with only `activeSlotCount` slots (capped to maxBotSlots
+        // until real humans push it higher) instead of always instantiating all 6 —
+        // local hot-seat play (continuous === false) keeps the full board.
+        const slotCount = continuous ? activeSlotCount : starts.length;
+        players = starts.slice(0, slotCount).map(([x, y], i) => ({
             id: i,
             x: x + .5,
             y: y + .5,
@@ -472,6 +484,38 @@
             });
         }
         updatePanel();
+    }
+
+    // Grow the board (in continuous/hosted mode) so slot `humanId` exists, creating any
+    // in-between slots as bots along the way. Only called once a real human is actually
+    // joining that slot, so slots 5/6 never appear until a 5th/6th person scans the QR.
+    function ensureActiveSlot(humanId) {
+        if (!continuous || !players) return;
+        if (humanId <= activeSlotCount && players[humanId - 1]) return;
+        const target = Math.min(starts.length, Math.max(activeSlotCount, maxBotSlots, humanId));
+        for (let s = activeSlotCount + 1; s <= target; s++) {
+            const [x, y] = starts[s - 1];
+            const isIncomingHuman = s === humanId;
+            if (isIncomingHuman) botIds.delete(s); else botIds.add(s);
+            const p = {
+                id: s - 1,
+                x: x + .5,
+                y: y + .5,
+                bot: !isIncomingHuman,
+                aiTimer: 0,
+                aiDx: 0,
+                aiDy: 0,
+                speed: 7.5,
+                speedBoostUntil: 0,
+                frozenUntil: 0,
+                trail: [],
+                isOut: false,
+                lastCell: null
+            };
+            players[s - 1] = p;
+            claimStartArea(p, Math.floor(p.x), Math.floor(p.y));
+        }
+        activeSlotCount = target;
     }
 
     // Continuous-mode respawn: bring a single slot back to life at its starting corner
@@ -1852,8 +1896,12 @@
                 }
                 continuous = true;
                 updateJoinPanel();
+                // Fresh room: only pre-fill the base 4 bot slots. Slots 5/6 are created
+                // on demand (see ensureActiveSlot) once real people 5 and 6 actually join.
                 botIds.clear();
-                for (let i = 1; i <= starts.length; i++) botIds.add(i);
+                activeSlotCount = maxBotSlots;
+                for (let i = 1; i <= activeSlotCount; i++) botIds.add(i);
+                knownHumanIds = new Set();
                 reset();
             }
             if (message.type === 'reconnected') {
@@ -1864,8 +1912,15 @@
                 }
                 continuous = true;
                 updateJoinPanel();
+                // The board only needs to be as big as the base bot count, or big enough
+                // to cover whichever human slot numbers are already taken — whichever is
+                // larger — so a reconnect never re-adds bots for 5/6 unless a human is
+                // already sitting in one of those slots.
+                const humanIds = message.humanIds || [];
+                activeSlotCount = Math.min(starts.length, Math.max(maxBotSlots, 0, ...humanIds));
                 botIds.clear();
-                for (let i = 1; i <= starts.length; i++) if (!message.humanIds.includes(i)) botIds.add(i);
+                for (let i = 1; i <= activeSlotCount; i++) if (!humanIds.includes(i)) botIds.add(i);
+                knownHumanIds = new Set(humanIds);
                 reset();
             }
             if (message.type === 'players') {
@@ -1878,6 +1933,10 @@
                     incomingHumanIds.forEach(id => {
                         if (!knownHumanIds.has(id)) {
                             knownHumanIds.add(id);
+                            // Grow the board first if this human is claiming slot 5/6 (or any
+                            // slot beyond what currently exists) — creates any in-between slots
+                            // as bots so ids stay contiguous.
+                            ensureActiveSlot(id);
                             const slot = players[id - 1];
                             if (!slot) return;
                             // Ensure it's treated as a human and respawn at its corner.
