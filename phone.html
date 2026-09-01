@@ -102,7 +102,7 @@
                                 const paletteNames = ['RED','BLUE','GREEN','YELLOW','PURPLE'];
                                 const displayName = paletteNames[idx-1] || ('P'+idx);
                                 fishEl.style.display = 'block';
-                                fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><ellipse cx="32" cy="16" rx="26" ry="16" fill="${m.color}"/><polygon points="52,12 62,8 62,24 52,20" fill="${m.color}"/><circle cx="44" cy="10" r="3.8" fill="#fffdf8"/><circle cx="44" cy="10" r="1.6" fill="#18302c"/></svg>`;
+                                fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><polygon points="52,12 62,8 62,24 52,20" fill="${m.color}"/><ellipse cx="32" cy="16" rx="26" ry="16" fill="${m.color}"/><circle cx="18" cy="10" r="3.8" fill="#fffdf8"/><circle cx="18" cy="10" r="1.6" fill="#18302c"/></svg>`;
                                 status.innerHTML = `<div style="font-weight:700;font-size:18px;color:var(--ink)">You are ${displayName}</div><div style="font-size:13px;color:#60726d">Player ${idx}</div>`;
                                 window.myPlayerId = m.id; window.myPlayerColor = m.color;
                                 try{if(sessionKey)sessionStorage.setItem(sessionKey,JSON.stringify({id:m.id,color:m.color,name:myName}));}catch(e){}
@@ -113,7 +113,7 @@
                                 const paletteNames = ['RED','BLUE','GREEN','YELLOW','PURPLE'];
                                 const displayName = pid ? (paletteNames[pid-1] || ('P'+pid)) : 'Player';
                                 fishEl.style.display = 'block';
-                                fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><ellipse cx="32" cy="16" rx="26" ry="16" fill="${color}"/><polygon points="52,12 62,8 62,24 52,20" fill="${color}"/><circle cx="44" cy="10" r="3.8" fill="#fffdf8"/><circle cx="44" cy="10" r="1.6" fill="#18302c"/></svg>`;
+                                fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><polygon points="52,12 62,8 62,24 52,20" fill="${color}"/><ellipse cx="32" cy="16" rx="26" ry="16" fill="${color}"/><circle cx="18" cy="10" r="3.8" fill="#fffdf8"/><circle cx="18" cy="10" r="1.6" fill="#18302c"/></svg>`;
                                 status.innerHTML = `<div style="font-weight:700;font-size:18px;color:var(--ink)">You are ${displayName}</div><div style="font-size:13px;color:#60726d">${pid?('Player '+pid):''}</div><div style="font-size:14px;color:#60726d">Game started</div>`;
                                 name.style.display = 'none'; save.style.display = 'none';
                                 // ensure joystick is visible when the round starts
