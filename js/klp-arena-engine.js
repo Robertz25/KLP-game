@@ -1781,13 +1781,15 @@
         fetchTopScores();
         const now = performance.now();
         const statusEl = document.getElementById('roundStatus');
-        if (continuous) {
-            statusEl.textContent = 'LIVE · KONTINUERLIG';
-        } else if (!roundOver) {
-            const remaining = Math.max(0, Math.ceil((roundDuration - (now - roundStart)) / 1000));
-            statusEl.textContent = `RUNDE ${round} · ${remaining}s`;
-        } else {
-            statusEl.textContent = `RUNDE ${round} · FERDIG`;
+        if (statusEl) {
+            if (continuous) {
+                statusEl.textContent = 'LIVE · KONTINUERLIG';
+            } else if (!roundOver) {
+                const remaining = Math.max(0, Math.ceil((roundDuration - (now - roundStart)) / 1000));
+                statusEl.textContent = `RUNDE ${round} · ${remaining}s`;
+            } else {
+                statusEl.textContent = `RUNDE ${round} · FERDIG`;
+            }
         }
     }
 
