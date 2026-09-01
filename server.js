@@ -22,23 +22,28 @@ if (pool) {
     pool.query(`CREATE TABLE IF NOT EXISTS contacts (
         id SERIAL PRIMARY KEY,
         name TEXT,
+        company TEXT,
         phone TEXT,
         score INTEGER,
         room TEXT,
         created_at TIMESTAMPTZ DEFAULT now()
-    )`).then(() => console.log('[db] contacts table ready')).catch(err => console.error('[db] failed to create contacts table', err));
+    )`).then(() =>
+        // Table may already exist from before "company" was added — patch it in-place instead
+        // of requiring a manual migration.
+        pool.query('ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company TEXT')
+    ).then(() => console.log('[db] contacts table ready')).catch(err => console.error('[db] failed to create contacts table', err));
 } else {
     console.warn('[db] DATABASE_URL not set — contact form submissions will only be logged, not stored');
 }
-async function saveContact({ name, phone, score, room }) {
+async function saveContact({ name, company, phone, score, room }) {
     if (!pool) {
-        console.log('[contact] (no DATABASE_URL, not saved)', { name, phone, score, room });
+        console.log('[contact] (no DATABASE_URL, not saved)', { name, company, phone, score, room });
         return;
     }
     try {
         await pool.query(
-            'INSERT INTO contacts (name, phone, score, room) VALUES ($1, $2, $3, $4)',
-            [name, phone, score, room]
+            'INSERT INTO contacts (name, company, phone, score, room) VALUES ($1, $2, $3, $4, $5)',
+            [name, company, phone, score, room]
         );
     } catch (err) {
         console.error('[db] failed to save contact', err);
@@ -461,6 +466,7 @@ wss.on('connection', socket => {
             const details = message.details || {};
             saveContact({
                 name: String(details.name || '').slice(0, 100),
+                company: String(details.company || '').slice(0, 120),
                 phone: String(details.phone || '').slice(0, 30),
                 score: Number.isFinite(client.lastScore) ? client.lastScore : null,
                 room: client.room ? client.room.code : null

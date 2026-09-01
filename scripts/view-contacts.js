@@ -13,7 +13,7 @@ const pool = new Pool({ connectionString: databaseUrl, ssl: { rejectUnauthorized
 
 (async () => {
     try {
-        const { rows } = await pool.query('SELECT id, name, phone, score, room, created_at FROM contacts ORDER BY created_at DESC');
+        const { rows } = await pool.query('SELECT id, name, company, phone, score, room, created_at FROM contacts ORDER BY created_at DESC');
         if (!rows.length) {
             console.log('No contacts saved yet.');
         } else {
