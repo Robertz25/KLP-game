@@ -1724,7 +1724,7 @@
         }
         el.innerHTML = players.map((p, i) => {
             const pct = total ? Math.round((counts[i] / total) * 100) : 0;
-            return `<div class="player-row" style="${p.isOut ? 'opacity:.45' : ''}"><span class="dot" style="background:${colors[p.id]}"></span><div>${p.bot ? 'BOT · ' : ''}${playerLabel(p.id)}${p.isOut ? ' · UTE' : ''}<div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${colors[p.id]}"></div></div></div><div class="player-percent">${pct}%</div></div>`;
+            return `<div class="player-row" style="${p.isOut ? 'opacity:.45' : ''}"><span class="dot" style="background:${colors[p.id]}"></span><div>${p.bot ? 'BOT · ' : ''}${playerLabel(p.id)}${p.isOut ? ' · UTE' : ''}<div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${colors[p.id]}"></div></div></div><div class="player-percent">${scores[i].toLocaleString()}</div></div>`;
         }).join('');
         // The leaderboard panel now shows the all-time top 5 DB-submitted scores (see
         // fetchTopScores/renderTopScores above) instead of the current match's live totals.
