@@ -264,6 +264,13 @@
       // instead of a single bare tile, so a fresh (or respawned) fish always has a little
       // breathing room to get moving in before it's forced to expose a trail.
       const START_RADIUS = 3;
+      // Trail expansion: how many tiles outward a trail should occupy for collision/capture
+      // checks. 0 = original single-tile trail. Increasing to 1 makes the trail occupy the
+      // 3x3 neighborhood around each trail point, making lines thicker and riskier.
+      // Default to no expanded collision footprint to avoid accidental instant deaths.
+      const TRAIL_EXPANSION = 0; // set >0 to make trails occupy a larger grid footprint for collisions
+      // Visual scale for trail stroke; increase to make lines look thicker without changing collision.
+      const TRAIL_VISUAL_SCALE = 0.9; // used to scale canvas lineWidth for rendering
       function claimStartArea(p, cx, cy){
         const r2 = START_RADIUS * START_RADIUS;
         const minX = Math.max(0, cx - START_RADIUS), maxX = Math.min(cols - 1, cx + START_RADIUS);
@@ -312,7 +319,14 @@
       // itself is never restricted by it — a human can still choose to run into their own
       // tail and die) — it's only used to bias the bot's own pathing choices below.
       function wouldSelfCross(p, gx, gy){
-        return !!(p.trail && p.trail.length && p.trail.some(c => c.x === gx && c.y === gy));
+        if (!p.trail || !p.trail.length) return false;
+        if (!TRAIL_EXPANSION) return p.trail.some(c => c.x === gx && c.y === gy);
+        const r2 = TRAIL_EXPANSION * TRAIL_EXPANSION;
+        for (const c of p.trail) {
+          const dx = c.x - gx, dy = c.y - gy;
+          if (dx*dx + dy*dy <= r2) return true;
+        }
+        return false;
       }
 
       // Sweeps every grid cell between a player's previous and new position through
@@ -748,15 +762,26 @@
         for (const other of players) {
           if (other.id === p.id) continue;
           if (other.isOut || !other.trail || !other.trail.length) continue;
-          if (other.trail.some(c => c.x === gx && c.y === gy)) {
+          // Check against an expanded trail footprint so thicker visual trails are also
+          // dangerous in gameplay.
+          let otherHit = false;
+          if (!TRAIL_EXPANSION) otherHit = other.trail.some(c => c.x === gx && c.y === gy);
+          else {
+            const r2 = TRAIL_EXPANSION * TRAIL_EXPANSION;
+            for (const c of other.trail) { const dx = c.x - gx, dy = c.y - gy; if (dx*dx + dy*dy <= r2) { otherHit = true; break; } }
+          }
+          if (otherHit) {
             killPlayer(other, now, p);
           }
         }
         if (ownerGrid[gy][gx] === p.id) {
           if (p.trail.length) captureTerritory(p);
         } else {
-          const selfIndex = p.trail.findIndex(c => c.x === gx && c.y === gy);
-          if (selfIndex >= 0) {
+          // Consider expanded trail footprint for self-cut detection as well.
+          let selfHit = false;
+          if (!TRAIL_EXPANSION) selfHit = p.trail.findIndex(c => c.x === gx && c.y === gy) >= 0;
+          else { const r2 = TRAIL_EXPANSION * TRAIL_EXPANSION; for (const c of p.trail) { const dx = c.x - gx, dy = c.y - gy; if (dx*dx + dy*dy <= r2) { selfHit = true; break; } } }
+          if (selfHit) {
             // Cutting your own tail is just as fatal as running into someone else's.
             killPlayer(p, now, p);
           } else {
@@ -767,7 +792,23 @@
       }
 
       function captureTerritory(p){
-        const trailSet = new Set(p.trail.map(c => c.x + ',' + c.y));
+        // Build an expanded trail footprint set used as an impenetrable wall when
+        // capturing territory. This mirrors the visual thickness so a wider stroke actually
+        // blocks tiles when a loop is closed.
+        const trailSet = new Set();
+        if (!TRAIL_EXPANSION) {
+          for (const c of p.trail) trailSet.add(c.x + ',' + c.y);
+        } else {
+          const r = TRAIL_EXPANSION; const r2 = r * r;
+          for (const c of p.trail) {
+            for (let yy = Math.max(0, c.y - r); yy <= Math.min(rows-1, c.y + r); yy++) {
+              for (let xx = Math.max(0, c.x - r); xx <= Math.min(cols-1, c.x + r); xx++) {
+                const dx = xx - c.x, dy = yy - c.y;
+                if (dx*dx + dy*dy <= r2) trailSet.add(xx + ',' + yy);
+              }
+            }
+          }
+        }
         const isWall = (x,y) => ownerGrid[y][x] === p.id || trailSet.has(x + ',' + y);
         const outside = Array.from({length:rows}, () => new Array(cols).fill(false));
         const stack = [];
@@ -1087,7 +1128,8 @@
           ctx.save();
           ctx.strokeStyle = colors[p.id] || '#888';
           ctx.globalAlpha = .55;
-          ctx.lineWidth = tile * .32;
+          // Make the visual trail thicker to match expanded collision footprint.
+          ctx.lineWidth = tile * (TRAIL_VISUAL_SCALE + TRAIL_EXPANSION * 0.12);
           ctx.lineCap = 'round'; ctx.lineJoin = 'round';
           ctx.beginPath();
           // The underlying trail data is still one point per grid cell (needed for the
