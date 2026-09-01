@@ -99,7 +99,7 @@
                                 // ensure joystick is visible after rejoin/join
                                 joystick.style.display = 'block';
                                 const idx = Number(m.id.slice(1));
-                                const paletteNames = ['RED','BLUE','GREEN','YELLOW','PURPLE'];
+                                const paletteNames = ['RED','BLUE','GREEN','YELLOW','PURPLE','TEAL'];
                                 const displayName = paletteNames[idx-1] || ('P'+idx);
                                 fishEl.style.display = 'block';
                                 fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><polygon points="52,12 62,8 62,24 52,20" fill="${m.color}"/><ellipse cx="32" cy="16" rx="26" ry="16" fill="${m.color}"/><circle cx="18" cy="10" r="3.8" fill="#fffdf8"/><circle cx="18" cy="10" r="1.6" fill="#18302c"/></svg>`;
@@ -110,7 +110,7 @@
                               if (m.type === 'start') {
                                 const color = window.myPlayerColor || m.color || '#1f7a59';
                                 const pid = window.myPlayerId ? Number(window.myPlayerId.slice(1)) : null;
-                                const paletteNames = ['RED','BLUE','GREEN','YELLOW','PURPLE'];
+                                const paletteNames = ['RED','BLUE','GREEN','YELLOW','PURPLE','TEAL'];
                                 const displayName = pid ? (paletteNames[pid-1] || ('P'+pid)) : 'Player';
                                 fishEl.style.display = 'block';
                                 fishEl.innerHTML = `<svg viewBox="0 0 64 32" xmlns="http://www.w3.org/2000/svg" style="width:160px;height:100px"><polygon points="52,12 62,8 62,24 52,20" fill="${color}"/><ellipse cx="32" cy="16" rx="26" ry="16" fill="${color}"/><circle cx="18" cy="10" r="3.8" fill="#fffdf8"/><circle cx="18" cy="10" r="1.6" fill="#18302c"/></svg>`;

@@ -1,7 +1,7 @@
 (() => {
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
-    // This is a shared-screen party game (one TV/host screen plus up to 5 phone
+    // This is a shared-screen party game (one TV/host screen plus up to 6 phone
     // controllers), so every fish must always stay visible on the one shared canvas —
     // a panning "follow one player" camera would let the other fish wander outside the
     // visible area even though they're still safely inside the map. Instead, the whole
@@ -11,12 +11,12 @@
     const viewScale = Math.min(viewW / (cols * tile), viewH / (rows * tile));
     const viewOffsetX = (viewW - cols * tile * viewScale) / 2;
     const viewOffsetY = (viewH - rows * tile * viewScale) / 2;
-    // Free-for-all always keeps at least 5 fish (human + bots) on the board at once,
-    // like paper.io's crowded servers, so a 5th slot/colour/start position is included
-    // even though only 4 have local keyboard bindings (the 5th is always bot-driven
+    // Free-for-all always keeps at least 6 fish (human + bots) on the board at once,
+    // like paper.io's crowded servers, so a 6th slot/colour/start position is included
+    // even though only 4 have local keyboard bindings (the 5th/6th are always bot-driven
     // locally, but can still be taken over by a phone controller).
-    const colors = ['#df614d', '#3d77a8', '#3e996b', '#e1ad2f', '#9b59b6'];
-    const names = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'PURPLE'];
+    const colors = ['#df614d', '#3d77a8', '#3e996b', '#e1ad2f', '#9b59b6', '#16a3a3'];
+    const names = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'PURPLE', 'TEAL'];
     const humanNames = {};
 
     function playerLabel(id) {
@@ -32,7 +32,7 @@
     // (e.g. RED pressing up from the top-left spawn) hits the boundary wall in well
     // under a second, which reads as "the controls don't work" even though it's just
     // the wall.
-    const starts = [[8, 8], [cols - 9, rows - 9], [cols - 9, 8], [8, rows - 9], [Math.floor(cols / 2), 8]];
+    const starts = [[8, 8], [cols - 9, rows - 9], [cols - 9, 8], [8, rows - 9], [Math.floor(cols / 2), 8], [Math.floor(cols / 2), rows - 9]];
     const keys = [{up: 'w', down: 's', left: 'a', right: 'd', bomb: ' '}, {
         up: 'arrowup',
         down: 'arrowdown',
@@ -375,7 +375,7 @@
     // Starting territory: a small round patch of owned ground around the spawn point
     // instead of a single bare tile, so a fresh (or respawned) fish always has a little
     // breathing room to get moving in before it's forced to expose a trail.
-    const START_RADIUS = 3;
+    const START_RADIUS = 2;
     // Trail expansion: how many tiles outward a trail should occupy for collision/capture
     // checks. 0 = original single-tile trail. Increasing to 1 makes the trail occupy the
     // 3x3 neighborhood around each trail point, making lines thicker and riskier.

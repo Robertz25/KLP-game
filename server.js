@@ -66,10 +66,10 @@ const files = {
 const scriptFiles = {
     '/js/klp-arena-engine.js': 'js/klp-arena-engine.js'
 };
-const colors = ['#df614d', '#3d77a8', '#3e996b', '#e1ad2f', '#9b59b6'];
+const colors = ['#df614d', '#3d77a8', '#3e996b', '#e1ad2f', '#9b59b6', '#16a3a3'];
 // The arena page always keeps a minimum of this many fish (humans + bots) in play,
 // so the room needs this many joinable slots.
-const maxSlots = 5;
+const maxSlots = 6;
 
 // Auto-detecting "the" LAN address is inherently a guess whenever a machine has more than
 // one non-internal network interface — which is extremely common (VPN clients, Docker,
