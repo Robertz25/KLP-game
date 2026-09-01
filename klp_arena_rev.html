@@ -5,23 +5,82 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fiskekampen | Ta territorium</title>
   <style>
-    :root { --ink:#18302c; --muted:#60726d; --panel:#fffdf8; --green:#1f7a59; --mint:#dcefe2; }
+    /* Official KLP palette (granittgrå / morgenrød / fjellgrønn), pulled from klp.no's theme CSS. */
+    :root {
+      --ink:#3d3d3d; --muted:#767676; --panel:#fffdf8; --green:#1aa884; --green-dark:#0e654f; --mint:#cdfae2; --pink:#e41b65; --pink-dark:#b22852;
+      --sea-top:#edfff5; --sea-light:#80bfea; --sea-mid:#1aa884; --sea-deep:#084e70; --sea-dark:#052c3f;
+      --sea-gradient:
+        radial-gradient(ellipse at 50% -10%,rgba(228,27,101,.22) 0%,transparent 32%),
+        radial-gradient(ellipse at 50% -10%,rgba(255,255,255,.9) 0%,rgba(255,255,255,.25) 25%,transparent 55%),
+        linear-gradient(180deg,var(--sea-top) 0%,var(--sea-light) 18%,var(--sea-mid) 45%,var(--sea-deep) 75%,var(--sea-dark) 100%);
+      /* Reused so the same rays/seaweed/fish art also covers #arenaRoot while it's the fullscreen element (body's own
+         pseudo-elements aren't painted at all once a descendant enters the Fullscreen API's top layer). */
+      --ray-images:
+        linear-gradient(115deg,transparent 24%,rgba(255,255,255,.28) 35%,transparent 46%),
+        linear-gradient(70deg,transparent 40%,rgba(255,255,255,.18) 50%,transparent 60%),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='170' viewBox='0 0 140 170'%3E%3Cg fill='none' stroke='%230e654f' stroke-width='10' stroke-linecap='round' opacity='.4'%3E%3Cpath d='M20 170C10 130 30 110 15 70 5 40 25 25 18 0'/%3E%3Cpath d='M55 170C65 135 40 115 55 75 65 45 45 30 55 5'/%3E%3Cpath d='M90 170C80 130 100 108 88 68 80 38 98 22 90 0'/%3E%3C/g%3E%3C/svg%3E"),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='170' viewBox='0 0 140 170'%3E%3Cg fill='none' stroke='%230e654f' stroke-width='10' stroke-linecap='round' opacity='.4'%3E%3Cpath d='M20 170C10 130 30 110 15 70 5 40 25 25 18 0'/%3E%3Cpath d='M55 170C65 135 40 115 55 75 65 45 45 30 55 5'/%3E%3Cpath d='M90 170C80 130 100 108 88 68 80 38 98 22 90 0'/%3E%3C/g%3E%3C/svg%3E");
+      --ray-repeat: no-repeat,no-repeat,no-repeat,no-repeat;
+      --ray-position: 0 0,0 0,left bottom,right bottom;
+      --ray-size: 100% 100%,100% 100%,120px auto,120px auto;
+      --fish-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 900 600'%3E%3Cg fill='%230e654f'%3E%3Cpath opacity='.30' transform='translate(60,90) scale(1.3) rotate(-6)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.18' transform='translate(300,60) scale(.9) rotate(8)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.24' transform='translate(560,140) scale(1.1) rotate(-4)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.16' transform='translate(780,70) scale(.8) rotate(6)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.22' transform='translate(150,320) scale(1) rotate(5)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.28' transform='translate(430,360) scale(1.2) rotate(-8)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.15' transform='translate(670,300) scale(.85) rotate(3)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.20' transform='translate(230,500) scale(1.05) rotate(-3)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.26' transform='translate(520,520) scale(.95) rotate(7)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3Cpath opacity='.18' transform='translate(800,470) scale(1.15) rotate(-5)' d='M2 10c0-6 8-10 18-10s18 4 18 10-8 10-18 10S2 16 2 10Z M38 10 52 2 52 18Z'/%3E%3C/g%3E%3C/svg%3E");
+    }
     *{box-sizing:border-box}
-    body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(circle at 10% 0%, #dcefe2 0 18%, transparent 42%),linear-gradient(135deg,#f6f1e7,#e8f1ea 62%,#d4e6dc);font-family:Georgia,serif}
-    .shell{width:min(1420px,100%);margin:auto;padding:24px 28px}
-    .masthead{display:flex;align-items:end;justify-content:space-between;margin-bottom:20px;margin-left:10px}
+    body{margin:0;min-height:100vh;overflow-x:hidden;isolation:isolate;color:var(--ink);background:var(--sea-gradient);background-attachment:fixed;font-family:Georgia,serif}
+    /* Rays + a small seaweed silhouette anchored to each bottom corner, all in one layer so it stays behind .shell. */
+    body::before{
+      content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:var(--ray-images);
+      background-repeat:var(--ray-repeat);
+      background-position:var(--ray-position);
+      background-size:var(--ray-size);
+    }
+    /* A large tile with several fish scattered at different sizes/angles so the repeat doesn't read as a grid. */
+    body::after{
+      content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+      background-image:var(--fish-image);
+      background-repeat:repeat;background-size:520px 350px;background-position:0 0;
+      animation:fish-drift 90s linear infinite;
+    }
+    .shell{position:relative;z-index:1;width:min(1420px,100%);min-height:100vh;margin:auto;padding:24px 28px}
+    /* While #arenaRoot itself is the fullscreen element, body's ::before/::after never paint (they're outside the
+       fullscreened subtree), so the ocean art has to be reapplied here, and the browser's default opaque black
+       ::backdrop needs overriding too, or fullscreen falls back to a plain black background. */
+    #arenaRoot::backdrop{background:var(--sea-gradient)}
+    #arenaRoot:fullscreen::after{
+      content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:var(--ray-images),var(--fish-image);
+      background-repeat:var(--ray-repeat),repeat;
+      background-position:var(--ray-position),0 0;
+      background-size:var(--ray-size),520px 350px;
+    }
+    /* Rising bubble field near the left edge of the board. */
+    .shell::before{
+      content:"";position:fixed;z-index:0;pointer-events:none;
+      left:1%;bottom:0;width:80px;height:100%;
+      background-image:
+        radial-gradient(circle,rgba(255,255,255,.55) 0 3px,transparent 4px),
+        radial-gradient(circle,rgba(255,255,255,.4) 0 2px,transparent 3px),
+        radial-gradient(circle,rgba(255,255,255,.4) 0 2.5px,transparent 3.5px);
+      background-repeat:repeat-y,repeat-y,repeat-y;
+      background-size:60px 160px,60px 160px,60px 160px;
+      background-position:10px 20px,40px 90px,25px 140px;
+      animation:bubbles 9s linear infinite;
+    }
+    /* Positioned so this content paints above the z-index:0 ocean/bubble pseudo-elements instead of behind them. */
+    .masthead{position:relative;z-index:1;display:flex;align-items:end;justify-content:space-between;margin-bottom:20px;margin-left:10px}
     .eyebrow{font:700 11px/1.2 Arial, sans-serif;letter-spacing:.16em;color:var(--green);text-transform:uppercase}
-    h1{margin:3px 0 0;font-family:"Lyon", Georgia, serif; font-size:40px; color:#111; font-weight:700;}
-    .layout{display:grid;grid-template-columns:1fr 360px;gap:28px}
+    h1{margin:3px 0 0;font-family:"Lyon", Georgia, serif; font-size:40px; color:var(--ink); font-weight:700;}
+    .layout{position:relative;z-index:1;display:grid;grid-template-columns:1fr 360px;gap:28px}
         .board-wrap{background:transparent;padding:6px;border-radius:12px}
         .board-frame{background:#07121a;border-radius:12px;padding:14px;border:8px solid #fff;box-shadow:0 12px 30px rgba(0,0,0,.25)}
         #game{display:block;width:100%;height:auto;border-radius:8px;background:#07121a;}
     .underboard{display:flex;justify-content:space-between;align-items:center;padding:12px}
     .tip{color:var(--muted);font:12px/1.4 Arial, sans-serif}
-    .restart{background:var(--ink);color:#fff;padding:10px 14px;border-radius:6px;border:0}
+    .restart{background:var(--green-dark);color:#fff;padding:10px 14px;border-radius:6px;border:0}
     .side{display:grid;gap:14px}
-    .panel { background: #fffdf8; border-radius: 12px; padding: 16px; color: #111; box-shadow: 0 6px 18px rgba(8,21,26,.06); border: 1px solid rgba(8,21,26,.04); }
-        .panel h2 { color: #0b1a1f; margin-top: 0; }
+    .panel { background: #fffdf8; border-radius: 12px; padding: 16px; color: #111; box-shadow: 0 6px 18px rgba(8,21,26,.06); border: 1px solid rgba(8,21,26,.04); border-top: 3px solid var(--green); }
+        .panel h2 { color: var(--ink); margin-top: 0; margin-bottom: 2px; }
         .controls { color: #0b1a1f; font: 11px/1.65 Arial, sans-serif; }
         .controls strong { color: #0b1a1f; }
         .player-row { color: #0b1a1f; }
@@ -34,14 +93,22 @@
     .score-bar{height:12px;background:#eef6ee;border-radius:8px;margin-top:8px;overflow:hidden}
     .score-fill{height:100%;width:0%;transition:width 220ms linear}
     .player-percent{text-align:right;color:#0b1a1f;font-weight:700}
+    @keyframes fish-drift{from{background-position:0 0}to{background-position:-520px 0}}
+    @keyframes bubbles{from{background-position:10px 20px,40px 90px,25px 140px}to{background-position:10px -140px,40px -70px,25px -20px}}
+    @media (prefers-reduced-motion:reduce){body::after,.shell::before{animation:none}}
   </style>
   <style>
   #fullscreenExit{display:none;position:fixed;top:12px;right:12px;z-index:9999;background:#fff;color:#111;border-radius:6px;padding:8px 12px;border:0;box-shadow:0 6px 18px rgba(0,0,0,.35);}
-  #fullscreenBtn{background:#18302c;color:#fff;border:0;padding:8px 12px;border-radius:4px;cursor:pointer}
+  #fullscreenBtn{background:var(--pink);color:#fff;border:0;padding:8px 12px;border-radius:4px;cursor:pointer}
   /* Fullscreen now targets the whole shell (board + side panel with QR/leaderboard/stats)
      instead of just the canvas, so joining, high scores and live stats stay visible. */
-  #arenaRoot:fullscreen, #arenaRoot:-webkit-full-screen{width:100vw;height:100vh;max-width:none;padding:24px;box-sizing:border-box;background:linear-gradient(135deg,#f6f1e7,#e8f1ea 62%,#d4e6dc);overflow:auto;display:flex;flex-direction:column;justify-content:center}
+  #arenaRoot:fullscreen, #arenaRoot:-webkit-full-screen{width:100vw;height:100vh;max-width:none;padding:24px;box-sizing:border-box;background:var(--sea-gradient);overflow:auto;display:flex;flex-direction:column;justify-content:center}
   #arenaRoot:fullscreen .layout, #arenaRoot:-webkit-full-screen .layout{width:100%}
+  /* The board normally sizes itself from column width (height:auto), which can make it taller than the
+     screen once the side panels are added back in; sizing it from the available height instead means the
+     whole layout fits in one viewport and #arenaRoot never needs to scroll. */
+  #arenaRoot:fullscreen .board-frame, #arenaRoot:-webkit-full-screen .board-frame{height:calc(100vh - 220px);display:flex;align-items:center;justify-content:center}
+  #arenaRoot:fullscreen #game, #arenaRoot:-webkit-full-screen #game{width:auto;height:100%;max-width:100%}
   </style>
   </head>
 <body>

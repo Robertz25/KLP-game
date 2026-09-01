@@ -64,6 +64,9 @@ export default function App() {
 
   return (
     <div className="App">
+      <img className="fish fish--small" src="/fish.svg" alt="" aria-hidden="true" />
+      <img className="fish fish--medium" src="/fish.svg" alt="" aria-hidden="true" />
+      <img className="fish fish--large" src="/fish.svg" alt="" aria-hidden="true" />
       <h1>Convert HEIC to JPEG and Base64</h1>
       <input type="file" onChange={handleImageUpload} accept="image/*,.heic,.pdf" />
       {errorMessage && <p style={{ color: "red" }}>{errorMessage}</p>}

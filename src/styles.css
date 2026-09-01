@@ -1,5 +1,114 @@
+:root {
+  --sea-top: #dff4ef;
+  --sea-light: #a9dfe5;
+  --sea-mid: #3ca6bd;
+  --sea-deep: #07536b;
+  --sea-dark: #063b4d;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(
+      ellipse at 50% -10%,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(255, 255, 255, 0.25) 25%,
+      transparent 55%
+    ),
+    linear-gradient(
+      180deg,
+      var(--sea-top) 0%,
+      var(--sea-light) 18%,
+      var(--sea-mid) 45%,
+      var(--sea-deep) 75%,
+      var(--sea-dark) 100%
+    );
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.8;
+  background:
+    linear-gradient(115deg, transparent 25%, rgba(255, 255, 255, 0.12) 35%, transparent 45%),
+    linear-gradient(70deg, transparent 40%, rgba(255, 255, 255, 0.08) 50%, transparent 60%);
+}
+
+#root,
 .App {
-    font-family: sans-serif;
-    text-align: center;
+  min-height: 100vh;
+}
+
+.App {
+  position: relative;
+  z-index: 1;
+  font-family: sans-serif;
+  text-align: center;
+}
+
+.fish {
+  position: fixed;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.25;
+}
+
+.fish--small {
+  width: 35px;
+  top: 30%;
+  left: 20%;
+}
+
+.fish--medium {
+  width: 55px;
+  top: 45%;
+  left: 65%;
+}
+
+.fish--large {
+  width: 80px;
+  top: 65%;
+  left: 35%;
+}
+
+.App::before {
+  content: "\00b7   \00b0      \00b7        \00b0   \00b7       \00b0";
+  position: fixed;
+  z-index: 0;
+  bottom: 0;
+  left: 10%;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 3rem;
+  letter-spacing: 3rem;
+  pointer-events: none;
+  animation: bubbles 12s ease-in-out infinite;
+}
+
+@keyframes bubbles {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
   }
+
+  30% {
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: translateY(-80vh);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .App::before {
+    animation: none;
+  }
+}
   
