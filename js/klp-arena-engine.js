@@ -536,6 +536,10 @@
         slot.trail = [];
         slot.lastCell = null;
         slot.heading = undefined;
+        slot.aiHuntUntil = 0;
+        slot.aiInvadeRivalId = null;
+        slot.aiInvadePhase = null;
+        slot.aiExpandTarget = null;
         scores[id - 1] = 0;
         scoreNames[id - 1] = playerLabel(id - 1);
         const [cornerX, cornerY] = starts[slot.id];
@@ -556,6 +560,13 @@
             p.speedBoostUntil = 0;
             p.lastCell = null;
             p.heading = undefined;
+            // Clear any bot AI state tied to the trail that just got wiped — otherwise a
+            // respawned bot could resume "retreating" toward a target from its previous
+            // life, or skip re-rolling a hunt/invade decision until a stale lock expires.
+            p.aiHuntUntil = 0;
+            p.aiInvadeRivalId = null;
+            p.aiInvadePhase = null;
+            p.aiExpandTarget = null;
             // Clear any lingering owner tiles that belonged to this slot so they don't
             // block finding a nearby clear spawn.
             for (let yy = 0; yy < rows; yy++) for (let xx = 0; xx < cols; xx++) if (ownerGrid[yy][xx] === p.id) ownerGrid[yy][xx] = null;
@@ -886,7 +897,8 @@
 
     // Invasion target used only once a rival is already nearby: the nearest tile owned
     // by that specific rival, so a close-quarters push into their land still reads as a
-    // deliberate reaction to their presence rather than a random cross-map raid.
+    // deliberate reaction to their presence rather than a random cross-map raid. Used as
+    // a fallback when the rival's territory is too small/thin to find a proper deep target.
     function rivalTerritoryTarget(p, rivalId) {
         const px = Math.floor(p.x), py = Math.floor(p.y);
         let best = null;
@@ -899,6 +911,58 @@
             }
         }
         return best;
+    }
+
+    // Hard cap on both how far a push target may be and how much trail an invasion drags
+    // through/around enemy territory before being forced to retreat and bank — without
+    // this a bot could wander deep enough into a rival's land that finding its own way
+    // back takes so long the exposed trail just sits there as a standing risk. Kept low
+    // enough that a bot (speed ~7.5 tiles/s) can actually cover the distance and reach
+    // the target inside INVADE_PUSH_TIMEOUT_MS even while curving — a cap that's rarely
+    // reachable just meant every push ended via timeout having barely progressed at all.
+    const INVADE_MAX_TRAIL = 30;
+    // Safety valve: if a push has been running this long (ms) without banking, force a
+    // retreat regardless of trail length — guards against a bot getting stuck pushing
+    // toward an unreachable/stale target (e.g. the rival's land changed shape under it).
+    const INVADE_PUSH_TIMEOUT_MS = 7000;
+
+    // Deep invasion target: picks the *farthest* tile owned by the rival within a capped
+    // distance, instead of the nearest one past a fixed depth. Using "nearest tile beyond
+    // a fixed minimum depth" collapsed to a single adjacent step whenever two bots'
+    // territories already bordered each other (which is common), so the push instantly
+    // "reached" its target, flipped straight to retreat, walked back over the same tile,
+    // and was immediately eligible to invade again — a rapid flicker on the border that
+    // grabbed no real land and could self-cross its own trail during the back-and-forth.
+    // Aiming for the farthest available tile scales the push depth to however much
+    // territory the rival actually has, guaranteeing a real committed run every time.
+    function rivalDeepTarget(p, rivalId) {
+        const px = Math.floor(p.x), py = Math.floor(p.y);
+        let best = null;
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                if (ownerGrid[y][x] !== rivalId) continue;
+                const distance = Math.abs(x - px) + Math.abs(y - py);
+                if (distance > INVADE_MAX_TRAIL) continue;
+                if (!best || distance > best.distance) best = {x, y, distance};
+            }
+        }
+        return best || rivalTerritoryTarget(p, rivalId);
+    }
+
+    // Retreat target once an invasion has grabbed enough of a lead: the nearest tile the
+    // bot already owns, so it banks the incursion (and whatever it enclosed) as quickly
+    // and safely as possible instead of continuing to wander exposed inside enemy land.
+    function ownTerritoryRetreatTarget(p) {
+        const px = Math.floor(p.x), py = Math.floor(p.y);
+        let best = null;
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                if (ownerGrid[y][x] !== p.id) continue;
+                const distance = Math.abs(x - px) + Math.abs(y - py);
+                if (!best || distance < best.distance) best = {x, y, distance};
+            }
+        }
+        return best ? {x: best.x, y: best.y} : returnHomeTarget(p);
     }
 
     // A bot's real goal is score (territory owned), same as a human player's — so by
@@ -970,14 +1034,64 @@
         if (debugAI) p.aiMode = target ? `HUNT ${Math.round(hunt.distance)}` : null;
 
         if (!target) {
-            const nearby = nearestOpponent(p);
-            // nearestOpponent applies the right range per opponent type (wider for real
-            // human players), so any non-null result here is already "close enough" to
-            // consider pressing into their land even though they aren't currently exposed.
-            if (nearby) {
-                const targetingHuman = !nearby.other.bot;
-                if (Math.random() < (targetingHuman ? 0.65 : 0.4)) target = rivalTerritoryTarget(p, nearby.other.id);
-                if (debugAI && target) p.aiMode = `INVADE ${Math.round(nearby.distance)}`;
+            if (p.aiInvadeRivalId != null) {
+                // Already mid-invasion: keep pushing/retreating instead of re-rolling
+                // every frame — the old one-shot version could grab a single step into a
+                // rival's land, then flip back to plain expansion next frame while
+                // leaving that step's trail dangling inside enemy territory with nobody
+                // "in charge" of ever going back to bank it, which is exactly the exposed,
+                // undefended trail that got a bot killed for what looked like no reason.
+                const rival = players[p.aiInvadeRivalId];
+                const rivalGone = !rival || rival.isOut;
+                if (p.aiInvadePhase === 'push' && !rivalGone) {
+                    // Use the trail's raw length rather than growth-since-start: if the
+                    // bot's wandering path clips back through its own territory partway
+                    // through the push, enterCell auto-banks and resets p.trail — which
+                    // would otherwise make a "since start" delta go negative/meaningless.
+                    const trailLen = p.trail ? p.trail.length : 0;
+                    const cur = p.aiInvadeTarget;
+                    const reached = cur && Math.floor(p.x) === cur.x && Math.floor(p.y) === cur.y;
+                    const timedOut = now - (p.aiInvadeStartAt || now) > INVADE_PUSH_TIMEOUT_MS;
+                    if (trailLen > INVADE_MAX_TRAIL || timedOut || reached) {
+                        p.aiInvadePhase = 'retreat';
+                    } else {
+                        if (!cur || ownerGrid[cur.y][cur.x] !== p.aiInvadeRivalId) {
+                            p.aiInvadeTarget = rivalDeepTarget(p, p.aiInvadeRivalId);
+                        }
+                        target = p.aiInvadeTarget;
+                    }
+                }
+                if (p.aiInvadePhase === 'retreat' || rivalGone) {
+                    if (!p.trail || !p.trail.length) {
+                        // Banked (or the trail was cleared some other way) — invasion over.
+                        p.aiInvadeRivalId = null;
+                        p.aiInvadePhase = null;
+                        p.aiInvadeTarget = null;
+                    } else {
+                        target = ownTerritoryRetreatTarget(p);
+                    }
+                }
+                if (debugAI && target && p.aiInvadePhase) p.aiMode = `INVADE-${p.aiInvadePhase.toUpperCase()} ${Math.round(Math.abs(target.x - p.x) + Math.abs(target.y - p.y))}`;
+            } else {
+                const nearby = nearestOpponent(p);
+                // nearestOpponent applies the right range per opponent type (wider for
+                // real human players), so any non-null result here is already "close
+                // enough" to consider pushing into their land even though they aren't
+                // currently exposed. Bumped well up from the old 40%/65% one-shot chance
+                // — invasions are now a real committed push-then-retreat instead of a
+                // single risky step, so there's much less downside to starting one, and
+                // bots were invading so rarely it barely registered as behaviour.
+                if (nearby) {
+                    const targetingHuman = !nearby.other.bot;
+                    if (Math.random() < (targetingHuman ? 0.9 : 0.75)) {
+                        p.aiInvadeRivalId = nearby.other.id;
+                        p.aiInvadePhase = 'push';
+                        p.aiInvadeStartAt = now;
+                        p.aiInvadeTarget = rivalDeepTarget(p, nearby.other.id);
+                        target = p.aiInvadeTarget;
+                        if (debugAI && target) p.aiMode = `INVADE-PUSH ${Math.round(nearby.distance)}`;
+                    }
+                }
             }
         }
 
