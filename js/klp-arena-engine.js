@@ -518,6 +518,29 @@
         activeSlotCount = target;
     }
 
+    // A human slot that's gone for good (idle-kicked or their disconnect grace period
+    // expired server-side) gets handed back to a bot instead of sitting there frozen and
+    // uncontrolled forever — same idea as claiming a bot slot, just in reverse.
+    function convertSlotToBot(id) {
+        if (!continuous || !players) return;
+        const slot = players[id - 1];
+        if (!slot || slot.bot) return;
+        botIds.add(id);
+        slot.bot = true;
+        slot.isOut = false;
+        slot.trail = [];
+        slot.lastCell = null;
+        slot.heading = undefined;
+        scores[id - 1] = 0;
+        scoreNames[id - 1] = playerLabel(id - 1);
+        const [cornerX, cornerY] = starts[slot.id];
+        for (let yy = 0; yy < rows; yy++) for (let xx = 0; xx < cols; xx++) if (ownerGrid[yy][xx] === slot.id) ownerGrid[yy][xx] = null;
+        const spawn = findNearestClearStart(Math.floor(cornerX), Math.floor(cornerY)) || [Math.floor(cornerX), Math.floor(cornerY)];
+        slot.x = spawn[0] + 0.5;
+        slot.y = spawn[1] + 0.5;
+        claimStartArea(slot, Math.floor(slot.x), Math.floor(slot.y));
+    }
+
     // Continuous-mode respawn: bring a single slot back to life at its starting corner
     // without touching anyone else's board state, so the match itself never stops.
     function respawnPlayer(p) {
@@ -1999,7 +2022,12 @@
                             claimStartArea(slot, Math.floor(slot.x), Math.floor(slot.y));
                         }
                     });
-                    // Forget departed humans so future joins are detected as new.
+                    // Forget departed humans so future joins are detected as new — and hand
+                    // any slot they left back to a bot instead of leaving it frozen/uncontrolled
+                    // (see convertSlotToBot; covers idle-kicks and disconnect-timeout drops).
+                    knownHumanIds.forEach(id => {
+                        if (!incomingHumanIds.includes(id)) convertSlotToBot(id);
+                    });
                     knownHumanIds = new Set(incomingHumanIds);
                 }
                 updateQueuePanel(message.queue || []);

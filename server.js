@@ -231,19 +231,20 @@ function admitFromQueue(room, freedId) {
 // Some phones never send a clean WebSocket close (backgrounded tab, locked screen, OS
 // suspending the page) — the socket just goes quiet forever without the normal 20s
 // disconnect grace period ever kicking in. That left their fish sitting frozen on the
-// board ("uncontrolled" from everyone else's point of view) while anyone waiting in the
-// queue was stuck behind a slot the server still considered occupied. This sweep frees
-// any player slot that hasn't sent an `input` in IDLE_KICK_MS — but only while someone is
-// actually waiting for a spot, so it never disrupts a match with room to spare.
-const IDLE_KICK_MS = Number(process.env.IDLE_KICK_MS) || 45000;
+// board ("uncontrolled" from everyone else's point of view) forever. This sweep frees
+// any player slot that hasn't sent an `input` in IDLE_KICK_MS: if someone's waiting in
+// the queue they take the slot immediately, otherwise the host (see klp-arena-engine.js's
+// 'players' handler) notices the slot is no longer in the human list and hands it back
+// to a bot, so a fish is never just left sitting there uncontrolled.
+const IDLE_KICK_MS = Number(process.env.IDLE_KICK_MS) || 15000;
 function sweepIdlePlayers() {
     const now = Date.now();
     rooms.forEach(room => {
-        if (!room.queue || !room.queue.length) return;
+        let changed = false;
         for (const [id, client] of room.clients) {
             if (client.role !== 'player' || !/^p\d+$/.test(id)) continue;
             if (now - (client.lastInputAt || 0) > IDLE_KICK_MS) {
-                console.warn('WS idle player kicked to free slot for queue', {room: room.code, id, name: client.name});
+                console.warn('WS idle player kicked', {room: room.code, id, name: client.name});
                 room.clients.delete(id);
                 client.role = 'spectator';
                 send(client, {
@@ -251,12 +252,13 @@ function sweepIdlePlayers() {
                     message: 'You were moved out of the game due to inactivity. Rejoin to play again.'
                 });
                 admitFromQueue(room, id);
+                changed = true;
             }
         }
-        announce(room);
+        if (changed) announce(room);
     });
 }
-setInterval(sweepIdlePlayers, Number(process.env.IDLE_SWEEP_MS) || 8000);
+setInterval(sweepIdlePlayers, Number(process.env.IDLE_SWEEP_MS) || 5000);
 
 function newCode() {
     let code;
