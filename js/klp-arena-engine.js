@@ -676,8 +676,11 @@
     // A bot won't even consider a frontier tile as an expansion goal unless it's at
     // least this far past its own border. Without this, bots kept beelining for the
     // single nearest unclaimed tile and immediately turning back home, so every capture
-    // enclosed only a sliver of land instead of a real chunk of territory.
-    const BOT_MIN_REACH = 16;
+    // enclosed only a sliver of land instead of a real chunk of territory. Bumped up
+    // significantly (was 16) — on this big a board, 16 tiles was still a tiny fraction
+    // of the map, which is why bots' territory stayed a small blob hugging their spawn
+    // corner instead of pushing out into the open middle of the board.
+    const BOT_MIN_REACH = 34;
 
     function frontierTarget(p) {
         const px = Math.floor(p.x);
@@ -689,7 +692,10 @@
                 if (ownerGrid[y][x] === p.id) continue;
                 const distance = Math.abs(x - px) + Math.abs(y - py);
                 const homeBias = Math.abs(x - home[0]) + Math.abs(y - home[1]);
-                const score = distance + homeBias * 0.25;
+                // Home bias barely matters here (was 0.25) — bots were staying clustered
+                // right around their spawn corner instead of actually pushing out toward
+                // the wide-open middle of the board where all the unclaimed land is.
+                const score = distance + homeBias * 0.05;
                 if (!best || score < best.score) best = {x, y, score};
             }
         }
@@ -711,7 +717,7 @@
                 const distance = Math.abs(x - px) + Math.abs(y - py);
                 if (distance < BOT_MIN_REACH) continue;
                 const homeBias = Math.abs(x - home[0]) + Math.abs(y - home[1]);
-                const score = distance + homeBias * 0.25;
+                const score = distance + homeBias * 0.05;
                 if (!best || score < best.score) best = {x, y, score};
             }
         }
@@ -891,9 +897,11 @@
         // Randomize how far a bot commits to per expedition (re-rolled each time it's
         // back home with an empty trail) so it reliably pushes out far enough to
         // enclose a real chunk of land before banking it, instead of always turning
-        // back after a short, timid loop.
+        // back after a short, timid loop. Raised well past the old 40-80 range (which,
+        // on a 130x80 board, only ever enclosed a small patch right next to the bot's
+        // spawn corner) so each expedition claims a genuinely large chunk of territory.
         if (!p.trail || !p.trail.length || !p.aiBankAt) {
-            p.aiBankAt = 40 + Math.floor(Math.random() * 40);
+            p.aiBankAt = 90 + Math.floor(Math.random() * 90);
             p.aiPhase = 'out';
             p.aiSweepDir = Math.random() < 0.5 ? 1 : -1;
             p.aiSweepTarget = null;
