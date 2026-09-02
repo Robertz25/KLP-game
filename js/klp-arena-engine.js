@@ -671,8 +671,21 @@
     const BOT_ATTACK_RANGE = 12;
     // Real, QR-joined human players get noticed from much further away than bots notice
     // each other — makes bots feel like they're actually "hunting" the people who showed
-    // up to play, instead of just reacting to whoever happens to wander past.
-    const BOT_HUMAN_ATTACK_RANGE = 26;
+    // up to play, instead of just reacting to whoever happens to wander past. Used for
+    // proximity checks (nearestOpponent / territory invasion), which should still require
+    // an actual close encounter before a bot bothers pushing into someone's land.
+    const BOT_HUMAN_ATTACK_RANGE = 40;
+    // Range (in tiles) a bot will notice an exposed HUMAN trail from, used only by
+    // huntTarget. On a 130x80 board the old value (26) meant a human's trail had to be
+    // almost touching a bot before it even got considered — a human could draw a huge
+    // loop right past a bot's territory and the bot would never react, because the
+    // per-segment range check in huntTarget silently filtered every point of that trail
+    // out. Effectively unlimited so bots always know where any exposed human trail is,
+    // anywhere on the map; how *often* they actually commit to chasing it is instead
+    // handled by a distance-based probability in moveBot, so nearby exposure is chased
+    // almost every time while far-off exposure is only sometimes worth abandoning their
+    // own expansion for.
+    const BOT_HUMAN_HUNT_RANGE = cols + rows;
     // A bot won't even consider a frontier tile as an expansion goal unless it's at
     // least this far past its own border. Without this, bots kept beelining for the
     // single nearest unclaimed tile and immediately turning back home, so every capture
@@ -799,15 +812,19 @@
         let bestAny = null;
         for (const other of players) {
             if (other.id === p.id || other.isOut || !other.trail || !other.trail.length) continue;
-            // Only consider the base-ward portion of the trail (closest to their territory)
-            // so bots cut the line off rather than run down the opponent's tail.
-            const cutCount = Math.max(1, Math.ceil(other.trail.length * 0.65));
-            const candidates = other.trail.slice(0, cutCount);
-            const range = other.bot ? BOT_ATTACK_RANGE : BOT_HUMAN_ATTACK_RANGE;
+            // Consider the *entire* trail, not just the base-ward portion — a long
+            // exploratory loop can easily pass close to a bot far from where it started,
+            // and restricting to the base-ward 65% meant bots ignored exposed trail
+            // segments that were right next to them simply because that segment happened
+            // to be near the tip rather than the base. Nearest-point-wins already gives
+            // preference to cutting the line off close to home when that's genuinely the
+            // closest option.
+            const candidates = other.trail;
+            const range = other.bot ? BOT_ATTACK_RANGE : BOT_HUMAN_HUNT_RANGE;
             for (const c of candidates) {
                 const distance = Math.abs(c.x - px) + Math.abs(c.y - py);
                 if (distance > range) continue;
-                const candidate = {x: c.x, y: c.y, distance};
+                const candidate = {x: c.x, y: c.y, distance, isHuman: !other.bot};
                 if (!bestAny || distance < bestAny.distance) bestAny = candidate;
                 if (other.bot && (!bestBot || distance < bestBot.distance)) bestBot = candidate;
                 if (!other.bot && (!bestHuman || distance < bestHuman.distance)) bestHuman = candidate;
@@ -890,10 +907,6 @@
             return;
         }
         let target = null;
-        const nearby = nearestOpponent(p);
-        // nearestOpponent already applies the right range per opponent type (wider for
-        // real human players), so any non-null result here is already "close enough".
-        const isRivalClose = !!nearby;
         // Randomize how far a bot commits to per expedition (re-rolled each time it's
         // back home with an empty trail) so it reliably pushes out far enough to
         // enclose a real chunk of land before banking it, instead of always turning
@@ -907,17 +920,37 @@
             p.aiSweepTarget = null;
         }
 
-        if (isRivalClose) {
-            // A rival is exposed (dragging a trail) within striking distance: cut them
-            // off. This is the only situation that counts as "attacking". Bots commit to
-            // this harder when the rival is an actual human (vs. another bot), so real
-            // players feel meaningfully hunted instead of mostly being left alone.
-            const targetingHuman = !nearby.other.bot;
-            const hunt = huntTarget(p);
-            if (hunt && Math.random() < (targetingHuman ? 0.9 : 0.75)) target = hunt;
-                // Otherwise, still nearby but not exposed: occasionally press into their
-            // territory to steal land / provoke a fight rather than ignoring them.
-            else if (Math.random() < (targetingHuman ? 0.65 : 0.4)) target = rivalTerritoryTarget(p, nearby.other.id);
+        // Hunting an exposed trail is checked independently of nearestOpponent's body
+        // proximity — nearestOpponent only measures distance to a rival's *current
+        // position*, which stays "far" even when that rival's trail loops right past the
+        // bot (e.g. a human out on a long expedition). Gating huntTarget behind that check
+        // meant bots ignored trails that were genuinely close simply because the rival's
+        // head happened to be elsewhere. huntTarget already applies its own per-segment
+        // range (map-wide for humans), so this is the real "did I spot an exposed line"
+        // check.
+        const hunt = huntTarget(p);
+        if (hunt) {
+            // Commit near-certainly when the exposed trail is close, tapering off (but
+            // never to zero) the further away it is — so a distant human's trail is still
+            // worth abandoning territory expansion for sometimes, not just when they
+            // happen to wander into a small fixed radius.
+            const maxUsefulDistance = BOT_HUMAN_HUNT_RANGE;
+            const distanceFactor = Math.max(0, 1 - hunt.distance / maxUsefulDistance);
+            const base = hunt.isHuman ? 0.5 : 0.3;
+            const span = hunt.isHuman ? 0.45 : 0.45;
+            const commitChance = base + span * distanceFactor;
+            if (Math.random() < commitChance) target = hunt;
+        }
+
+        if (!target) {
+            const nearby = nearestOpponent(p);
+            // nearestOpponent applies the right range per opponent type (wider for real
+            // human players), so any non-null result here is already "close enough" to
+            // consider pressing into their land even though they aren't currently exposed.
+            if (nearby) {
+                const targetingHuman = !nearby.other.bot;
+                if (Math.random() < (targetingHuman ? 0.65 : 0.4)) target = rivalTerritoryTarget(p, nearby.other.id);
+            }
         }
 
         if (!target && p.trail && !p.isOut) {
