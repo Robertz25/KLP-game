@@ -210,6 +210,11 @@
     // one had ever joined). Persisting the last room this tab hosted and reattaching to
     // it by default means a reload keeps everyone's slot intact instead of starting over.
     const hostRoomStorageKey = 'klp-fiske-host-room';
+    // Opt-in on-screen AI diagnostics (?debug=1): shows each bot's current decision
+    // (HUNT/INVADE/EXPAND + distance to whatever it's reacting to) right above its fish,
+    // so "are bots actually noticing/chasing the human" can be checked directly on the
+    // live host screen instead of guessing from screenshots.
+    const debugAI = new URLSearchParams(location.search).get('debug') === '1';
     let room = new URLSearchParams(location.search).get('room') || (new URLSearchParams(location.search).get('host') ? 'AUTO' : null);
     if (!room) {
         try {
@@ -904,6 +909,7 @@
     function moveBot(p, dt, now) {
         if (p.isOut) return;
         if (p.frozenUntil && now < p.frozenUntil) {
+            if (debugAI) p.aiMode = 'FROZEN';
             return;
         }
         let target = null;
@@ -961,6 +967,7 @@
         } else {
             p.aiHuntUntil = 0;
         }
+        if (debugAI) p.aiMode = target ? `HUNT ${Math.round(hunt.distance)}` : null;
 
         if (!target) {
             const nearby = nearestOpponent(p);
@@ -970,6 +977,7 @@
             if (nearby) {
                 const targetingHuman = !nearby.other.bot;
                 if (Math.random() < (targetingHuman ? 0.65 : 0.4)) target = rivalTerritoryTarget(p, nearby.other.id);
+                if (debugAI && target) p.aiMode = `INVADE ${Math.round(nearby.distance)}`;
             }
         }
 
@@ -1016,6 +1024,7 @@
         if (target) {
             p.aiExpandTarget = null;
         } else {
+            if (debugAI) p.aiMode = 'EXPAND';
             const cur = p.aiExpandTarget;
             const reached = cur && Math.floor(p.x) === cur.x && Math.floor(p.y) === cur.y;
             const stale = cur && ownerGrid[cur.y][cur.x] === p.id;
@@ -1757,6 +1766,23 @@
             const x = p.x * tile, y = p.y * tile;
             drawFish(ctx, p, x, y, performance.now());
         });
+        if (debugAI) {
+            ctx.save();
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            players.forEach(p => {
+                if (p.isOut || !p.bot) return;
+                const label = p.aiMode || '';
+                if (!label) return;
+                const x = p.x * tile, y = p.y * tile - 16;
+                ctx.fillStyle = label.startsWith('HUNT') ? '#ff5c5c' : label.startsWith('INVADE') ? '#ffb84d' : '#7fd3ff';
+                ctx.strokeStyle = 'rgba(0,0,0,.8)';
+                ctx.lineWidth = 3;
+                ctx.strokeText(label, x, y);
+                ctx.fillText(label, x, y);
+            });
+            ctx.restore();
+        }
         drawCaptureRings(ctx, performance.now());
         drawParticles(ctx);
         ctx.restore();
