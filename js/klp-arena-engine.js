@@ -930,16 +930,36 @@
         // check.
         const hunt = huntTarget(p);
         if (hunt) {
-            // Commit near-certainly when the exposed trail is close, tapering off (but
-            // never to zero) the further away it is — so a distant human's trail is still
-            // worth abandoning territory expansion for sometimes, not just when they
-            // happen to wander into a small fixed radius.
-            const maxUsefulDistance = BOT_HUMAN_HUNT_RANGE;
-            const distanceFactor = Math.max(0, 1 - hunt.distance / maxUsefulDistance);
-            const base = hunt.isHuman ? 0.5 : 0.3;
-            const span = hunt.isHuman ? 0.45 : 0.45;
-            const commitChance = base + span * distanceFactor;
-            if (Math.random() < commitChance) target = hunt;
+            // The commit roll used to happen fresh every single frame (60x/sec) with no
+            // memory — so even a 90% chance meant the bot flip-flopped between "hunt" and
+            // its cached expansion target roughly every ~10 frames. Each flip reset
+            // p.aiExpandTarget and fought the heading smoothing (advanceHeading has a
+            // capped turn rate), so the bot never actually built up a consistent heading
+            // toward either goal — it just jittered near-motionless and barely closed any
+            // distance, which is why it visibly looked like bots "went normal" and ignored
+            // a rival right next to them. Now the roll only happens once (when not already
+            // locked onto a hunt), and a success locks the bot onto hunting for a couple of
+            // seconds so it has time to actually turn and travel toward the target.
+            const alreadyHunting = p.aiHuntUntil && now < p.aiHuntUntil;
+            if (!alreadyHunting) {
+                // Commit near-certainly when the exposed trail is close, tapering off (but
+                // never to zero) the further away it is — so a distant human's trail is
+                // still worth abandoning territory expansion for sometimes, not just when
+                // they happen to wander into a small fixed radius.
+                const maxUsefulDistance = BOT_HUMAN_HUNT_RANGE;
+                const distanceFactor = Math.max(0, 1 - hunt.distance / maxUsefulDistance);
+                const base = hunt.isHuman ? 0.5 : 0.3;
+                const span = hunt.isHuman ? 0.45 : 0.45;
+                const commitChance = base + span * distanceFactor;
+                if (Math.random() < commitChance) {
+                    p.aiHuntUntil = now + 2000 + Math.random() * 1500;
+                } else {
+                    p.aiHuntUntil = 0;
+                }
+            }
+            if (p.aiHuntUntil && now < p.aiHuntUntil) target = hunt;
+        } else {
+            p.aiHuntUntil = 0;
         }
 
         if (!target) {
