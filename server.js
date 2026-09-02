@@ -221,11 +221,42 @@ function admitFromQueue(room, freedId) {
     next.room = room;
     next.id = freedId;
     next.color = colors[number - 1] || '#888';
+    next.lastInputAt = Date.now();
     room.clients.set(freedId, next);
     console.warn('WS queue admit', {room: room.code, id: freedId, name: next.name});
     send(next, {type: 'joined', id: next.id, color: next.color});
     if (room.started) send(next, {type: 'start'});
 }
+
+// Some phones never send a clean WebSocket close (backgrounded tab, locked screen, OS
+// suspending the page) — the socket just goes quiet forever without the normal 20s
+// disconnect grace period ever kicking in. That left their fish sitting frozen on the
+// board ("uncontrolled" from everyone else's point of view) while anyone waiting in the
+// queue was stuck behind a slot the server still considered occupied. This sweep frees
+// any player slot that hasn't sent an `input` in IDLE_KICK_MS — but only while someone is
+// actually waiting for a spot, so it never disrupts a match with room to spare.
+const IDLE_KICK_MS = Number(process.env.IDLE_KICK_MS) || 45000;
+function sweepIdlePlayers() {
+    const now = Date.now();
+    rooms.forEach(room => {
+        if (!room.queue || !room.queue.length) return;
+        for (const [id, client] of room.clients) {
+            if (client.role !== 'player' || !/^p\d+$/.test(id)) continue;
+            if (now - (client.lastInputAt || 0) > IDLE_KICK_MS) {
+                console.warn('WS idle player kicked to free slot for queue', {room: room.code, id, name: client.name});
+                room.clients.delete(id);
+                client.role = 'spectator';
+                send(client, {
+                    type: 'idle-kicked',
+                    message: 'You were moved out of the game due to inactivity. Rejoin to play again.'
+                });
+                admitFromQueue(room, id);
+            }
+        }
+        announce(room);
+    });
+}
+setInterval(sweepIdlePlayers, Number(process.env.IDLE_SWEEP_MS) || 8000);
 
 function newCode() {
     let code;
@@ -321,7 +352,7 @@ const server = http.createServer((request, response) => {
 
 const wss = new WebSocket.Server({server});
 wss.on('connection', socket => {
-    const client = {socket, role: null, room: null, id: null, name: 'Guest', color: null};
+    const client = {socket, role: null, room: null, id: null, name: 'Guest', color: null, lastInputAt: Date.now()};
     socket.on('message', raw => {
             let message;
             try {
@@ -394,6 +425,7 @@ wss.on('connection', socket => {
             client.id = 'p' + number;
             client.name = String(message.name || 'Guest').slice(0, 30);
             client.color = colors[number - 1] || '#888';
+            client.lastInputAt = Date.now();
             room.clients.set(client.id, client);
             console.warn('WS join', {room: room.code, id: client.id, name: client.name});
             send(client, {type: 'joined', id: client.id, color: client.color});
@@ -420,6 +452,7 @@ wss.on('connection', socket => {
             client.id = id;
             client.name = (existing && existing.name) || String(message.name || 'Guest').slice(0, 30);
             client.color = colors[number - 1] || (existing && existing.color) || '#888';
+            client.lastInputAt = Date.now();
             room.clients.set(id, client);
             console.warn('WS rejoin', {room: room.code, id, hadExisting: !!existing, started: room.started});
             send(client, {type: 'joined', id: client.id, color: client.color});
@@ -530,11 +563,14 @@ wss.on('connection', socket => {
             client.room.percents = Array.isArray(message.percents) ? message.percents : client.room.percents;
             return;
         }
-        if (message.type === 'input' && client.role === 'player' && client.room.host) send(client.room.host, {
-            type: 'remote-input',
-            id: client.id,
-            input: message.input
-        });
+        if (message.type === 'input' && client.role === 'player' && client.room.host) {
+            client.lastInputAt = Date.now();
+            send(client.room.host, {
+                type: 'remote-input',
+                id: client.id,
+                input: message.input
+            });
+        }
         // Host requests room closure: kick all players and delete room
         if (message.type === 'close-room' && client.role === 'host') {
             const room = client.room;

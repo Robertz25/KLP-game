@@ -120,6 +120,20 @@
                                 joystick.style.display = 'block';
                               }
                               if (m.type === 'freeze-offer') { showFreezeOffer(m.options); }
+                              if (m.type === 'idle-kicked') {
+                                hideFreezeOverlay();
+                                joystick.style.display = 'none'; name.style.display = 'none'; save.style.display = 'none';
+                                dead.textContent = m.message || 'Moved out due to inactivity';
+                                dead.style.display = 'block'; status.textContent = '';
+                                scoreLine.style.display = 'none';
+                                if (fishEl) fishEl.style.opacity = '0.35';
+                                try{if(sessionKey)sessionStorage.removeItem(sessionKey);}catch(e){}
+                                window.myPlayerId = null; window.myPlayerColor = null;
+                                contact.style.display = 'none';
+                                if (deadActions) deadActions.style.display = 'flex';
+                                if (enterFormBtn) enterFormBtn.style.display = 'none';
+                                if (rejoinBtn) rejoinBtn.style.display = 'block';
+                              }
                               if (m.type === 'player-dead') {
                                 hideFreezeOverlay();
                                 joystick.style.display = 'none'; name.style.display = 'none'; save.style.display = 'none'; dead.textContent = 'You are out'; dead.style.display = 'block'; status.textContent = '';
