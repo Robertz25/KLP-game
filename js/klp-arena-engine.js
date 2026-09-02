@@ -1944,6 +1944,11 @@
                             // Ensure it's treated as a human and respawn at its corner.
                             botIds.delete(id);
                             slot.bot = false;
+                            // Fresh join/rejoin always starts from 0 — otherwise a player who
+                            // died and rejoined (or a new person taking over a bot slot) would
+                            // inherit whatever score the slot had accumulated before them.
+                            scores[id - 1] = 0;
+                            scoreNames[id - 1] = playerLabel(id - 1);
                             // clear any death state and trails, then try to place at a clear start and claim area
                             slot.isOut = false;
                             slot.trail = [];
