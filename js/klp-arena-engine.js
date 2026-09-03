@@ -321,9 +321,20 @@
     }
 
     const hostOverrideKey = 'klp-fiske-host-override';
-    // Track which human slot IDs we've already seen so newly joining players can be
-    // given a fresh start-area/respawn when they arrive.
-    let knownHumanIds = new Set();
+    // Tracks which human slot IDs we've already seen, and which "generation" of occupant
+    // currently holds each one, so newly joining players — including a different real
+    // person auto-admitted from the queue into a slot a previous human just vacated by
+    // dying — get a fresh start-area/respawn and, crucially, get their bot flag cleared
+    // so their real inputs actually control the fish. Comparing only id membership isn't
+    // enough here: the server can free and immediately re-fill the very same slot id (a
+    // dead player's `pN` handed straight to the next queued client), which looks
+    // identical to "the same human is still here" from the id alone. See the `gen` field
+    // on the `players` message (server.js) for how each occupant is told apart. A stored
+    // gen of `undefined` means "this id is known but we don't have a baseline gen for it
+    // yet" (used right after a host reconnect, where the id list arrives before the
+    // first proper `players` broadcast) — that state intentionally does NOT trigger the
+    // "newly joined" respawn path, since the occupant hasn't actually changed.
+    let knownHumanGens = new Map();
 
     function normalizeHostBase(value) {
         const trimmed = String(value || '').trim();
@@ -798,7 +809,7 @@
             target.frozenUntil = now + 2000;
             return;
         }
-        if (networkSocket && networkSocket.readyState === WebSocket.OPEN && room) {
+        if (networkSocket && networkSocket.readyState === WebSocket.OPEN && continuous) {
             // hand the choice off to the human's phone controller
             networkSocket.send(JSON.stringify({
                 type: 'freeze-offer',
@@ -1409,7 +1420,16 @@
         playKillSound();
         spawnParticles(p.x * tile, p.y * tile, colors[p.id] || '#fff', 22, {life: 650, maxSpeed: 140, size: 3});
         if (killer && killer.id !== p.id) addScore(killer.id, KILL_BONUS);
-        if (networkSocket && networkSocket.readyState === WebSocket.OPEN && room && !p.bot) {
+        // Gate on `continuous` (true once a hosted room is actually live), not the raw
+        // `room` variable — `room` only reflects whatever URL param/localStorage value
+        // existed at page load (used solely to decide whether to reattach vs. create a
+        // room) and is never updated afterward, so on a genuinely fresh host tab (no
+        // ?room= param, no prior localStorage) it stays `null`/falsy for the entire
+        // session even after a room has been created and is actively running. That used
+        // to silently swallow this message on every first-time host — the server never
+        // learned a human died, so the slot never got freed and nobody waiting in the
+        // queue could ever be admitted into it (see server.js's admitFromQueue).
+        if (networkSocket && networkSocket.readyState === WebSocket.OPEN && continuous && !p.bot) {
             networkSocket.send(JSON.stringify({type: 'player-dead', playerKey: `p${p.id + 1}`, score: scores[p.id]}));
         }
         if (continuous) {
@@ -1454,7 +1474,7 @@
         if (continuous) {
             // No round timer, no last-fish-standing ending — the arena just keeps running,
             // and share territory% with the server so it knows which bot is currently leading.
-            if (networkSocket && networkSocket.readyState === WebSocket.OPEN && room && now - (lastTerritoryReportAt || 0) > 1000) {
+            if (networkSocket && networkSocket.readyState === WebSocket.OPEN && now - (lastTerritoryReportAt || 0) > 1000) {
                 lastTerritoryReportAt = now;
                 networkSocket.send(JSON.stringify({type: 'territory', percents}));
             }
@@ -2139,7 +2159,7 @@
                 botIds.clear();
                 activeSlotCount = maxBotSlots;
                 for (let i = 1; i <= activeSlotCount; i++) botIds.add(i);
-                knownHumanIds = new Set();
+                knownHumanGens = new Map();
                 reset();
             }
             if (message.type === 'reconnected') {
@@ -2158,7 +2178,11 @@
                 activeSlotCount = Math.min(starts.length, Math.max(maxBotSlots, 0, ...humanIds));
                 botIds.clear();
                 for (let i = 1; i <= activeSlotCount; i++) if (!humanIds.includes(i)) botIds.add(i);
-                knownHumanIds = new Set(humanIds);
+                // No gen info is available yet on this message (it arrives on the very next
+                // `players` broadcast) — mark these ids as known-but-unbaselined so that
+                // follow-up broadcast just records their gen instead of treating currently
+                // still-connected humans as newly joined and wiping their score/position.
+                knownHumanGens = new Map(humanIds.map(id => [id, undefined]));
                 reset();
             }
             if (message.type === 'players') {
@@ -2167,10 +2191,20 @@
                 });
                 if (continuous && players) {
                     const incomingHumanIds = message.players.map(p => Number(p.id.slice(1)));
-                    // Respawn only newly-joined human slots so they get a fresh start area.
-                    incomingHumanIds.forEach(id => {
-                        if (!knownHumanIds.has(id)) {
-                            knownHumanIds.add(id);
+                    // A slot counts as "newly joined" (fresh respawn + bot flag cleared) when
+                    // either we've never seen this id before, or we have but its `gen` just
+                    // changed — i.e. a different real occupant (e.g. someone auto-admitted
+                    // from the queue) just took over a slot id that still looks unchanged if
+                    // you only compare ids. A stored gen of `undefined` means "known but no
+                    // baseline yet" (see the `reconnected` handler) and must NOT count as a
+                    // change on its first real sync.
+                    message.players.forEach(pMsg => {
+                        const id = Number(pMsg.id.slice(1));
+                        const gen = pMsg.gen;
+                        const priorGen = knownHumanGens.get(id);
+                        const isNew = !knownHumanGens.has(id) || (priorGen !== undefined && priorGen !== gen);
+                        knownHumanGens.set(id, gen);
+                        if (isNew) {
                             // Grow the board first if this human is claiming slot 5/6 (or any
                             // slot beyond what currently exists) — creates any in-between slots
                             // as bots so ids stay contiguous.
@@ -2238,10 +2272,12 @@
                     // Forget departed humans so future joins are detected as new — and hand
                     // any slot they left back to a bot instead of leaving it frozen/uncontrolled
                     // (see convertSlotToBot; covers idle-kicks and disconnect-timeout drops).
-                    knownHumanIds.forEach(id => {
-                        if (!incomingHumanIds.includes(id)) convertSlotToBot(id);
+                    [...knownHumanGens.keys()].forEach(id => {
+                        if (!incomingHumanIds.includes(id)) {
+                            convertSlotToBot(id);
+                            knownHumanGens.delete(id);
+                        }
                     });
-                    knownHumanIds = new Set(incomingHumanIds);
                 }
                 updateQueuePanel(message.queue || []);
             }

@@ -53,6 +53,16 @@ async function saveContact({ name, company, phone, score, room }) {
 const root = __dirname;
 const port = Number(process.env.PORT) || 3000;
 const rooms = new Map();
+// Monotonically increasing counter stamped onto a client whenever it newly claims a slot
+// (fresh join, or being pulled off the queue into a freed slot) — but deliberately NOT
+// bumped on a same-client `rejoin` (grace-period reconnect), since that's still the same
+// occupant resuming, not a new one. The host's `players` broadcast includes this per-slot
+// `gen`, which is how the game engine (js/klp-arena-engine.js) tells "a different real
+// person just took over this slot id" apart from "the same slot id is still assigned to
+// the same person as before" — both cases otherwise look identical (same `pN` id), which
+// used to make a queued player who got auto-admitted into a slot freed by a death
+// silently stay stuck under bot AI control (see knownHumanIds/knownHumanGens usage).
+let nextSlotGen = 1;
 const files = {
     '/': 'klp_arena_rev.html',
     '/lobby.html': 'lobby.html',
@@ -202,7 +212,7 @@ function announce(room) {
     }));
     room.clients.forEach(client => send(client, {
         type: 'players',
-        players: roomPlayers(room).map(player => ({id: player.id, name: player.name, color: player.color})),
+        players: roomPlayers(room).map(player => ({id: player.id, name: player.name, color: player.color, gen: player.gen})),
         slots: roomSlots(room),
         queue: queueInfo,
         started: room.started
@@ -222,6 +232,7 @@ function admitFromQueue(room, freedId) {
     next.id = freedId;
     next.color = colors[number - 1] || '#888';
     next.lastInputAt = Date.now();
+    next.gen = nextSlotGen++;
     room.clients.set(freedId, next);
     console.warn('WS queue admit', {room: room.code, id: freedId, name: next.name});
     send(next, {type: 'joined', id: next.id, color: next.color});
@@ -428,6 +439,7 @@ wss.on('connection', socket => {
             client.name = String(message.name || 'Guest').slice(0, 30);
             client.color = colors[number - 1] || '#888';
             client.lastInputAt = Date.now();
+            client.gen = nextSlotGen++;
             room.clients.set(client.id, client);
             console.warn('WS join', {room: room.code, id: client.id, name: client.name});
             send(client, {type: 'joined', id: client.id, color: client.color});
@@ -455,6 +467,12 @@ wss.on('connection', socket => {
             client.name = (existing && existing.name) || String(message.name || 'Guest').slice(0, 30);
             client.color = colors[number - 1] || (existing && existing.color) || '#888';
             client.lastInputAt = Date.now();
+            // A `rejoin` is the *same* occupant resuming after a dropped socket (grace
+            // period), not a different person taking over the slot — so it must keep the
+            // existing `gen` rather than bumping it. If there's nothing to inherit from
+            // (e.g. the slot's original client object was already GC'd), fall back to a
+            // fresh gen since there's no prior value to preserve anyway.
+            client.gen = (existing && existing.gen) || nextSlotGen++;
             room.clients.set(id, client);
             console.warn('WS rejoin', {room: room.code, id, hadExisting: !!existing, started: room.started});
             send(client, {type: 'joined', id: client.id, color: client.color});
